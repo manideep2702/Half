@@ -24,10 +24,10 @@
     "clsx": "^2.1.1",
     "exceljs": "^4.4.0",
     "framer-motion": "12.23.16",
-    "pdf-lib": "^1.17.1",
     "lucide-react": "^0.544.0",
     "next": "15.5.3",
     "nodemailer": "^6.10.1",
+    "pdf-lib": "^1.17.1",
     "react": "19.1.0",
     "react-day-picker": "^9.4.0",
     "react-dom": "19.1.0",
@@ -39,18 +39,21 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "4.0.8",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.3",
-    "tailwindcss": "^4",
+    "tailwindcss": "4.0.8",
     "tw-animate-css": "^1.3.8",
     "typescript": "^5"
   },
+  "overrides": {
+    "enhanced-resolve": "5.15.0"
+  },
   "optionalDependencies": {
-    "lightningcss-linux-x64-gnu": "1.30.1",
-    "@tailwindcss/oxide-linux-x64-gnu": "^4.0.0"
+    "@tailwindcss/oxide-linux-x64-gnu": "^4.0.0",
+    "lightningcss-linux-x64-gnu": "1.30.1"
   }
 }
