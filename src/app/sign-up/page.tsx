@@ -26,11 +26,10 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState<"form" | "otp">("form");
-  const [code, setCode] = useState("");
+  // OTP flow removed: simple password sign-up
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [canResendAt, setCanResendAt] = useState<number>(0);
+  // resend state removed with OTP flow
 
 
   async function onSubmit(e: React.FormEvent) {
@@ -48,21 +47,26 @@ export default function SignUpPage() {
     setLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
-      const { error } = await supabase.auth.signInWithOtp({
+      const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, "");
+      const { data, error } = await supabase.auth.signUp({
         email,
+        password,
         options: {
           emailRedirectTo: `${siteUrl}/auth/callback`,
           data: { full_name: fullName, name: fullName, phone, city },
         },
       });
       if (error) {
-        setError(error.message || "Failed to send verification code.");
+        setError(error.message || "Failed to create account.");
         return;
       }
-      setStep("otp");
-      setInfo("We sent a verification code to your email.");
-      setCanResendAt(Date.now() + 60_000);
+      // If email confirmation is disabled, session exists → go to profile
+      if (data?.session?.user) {
+        window.location.assign("/profile/edit");
+        return;
+      }
+      // Otherwise, send them to sign-in after verification link
+      setInfo("Account created. Please check your email to verify and then sign in.");
     } catch (e: any) {
       setError(e?.message || "Unexpected error");
     } finally {
@@ -70,72 +74,6 @@ export default function SignUpPage() {
     }
   }
 
-  async function onVerify(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setInfo(null);
-    if (!code || code.length < 4) {
-      setError("Enter the code we sent to your email.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const supabase = getSupabaseBrowserClient();
-      const ver = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
-      if (ver.error) {
-        setError(ver.error.message || "Verification failed.");
-        return;
-      }
-      // Set password after verified session exists
-      if (password) {
-        const upd = await supabase.auth.updateUser({ password });
-        if (upd.error) {
-          setInfo("Verified. You can set your password later from profile.");
-        }
-      }
-      // Redirect to profile completion
-      window.location.assign("/profile/edit");
-    } catch (e: any) {
-      setError(e?.message || "Unexpected error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function onResend() {
-    if (Date.now() < canResendAt) return;
-    setError(null);
-    setInfo(null);
-    setLoading(true);
-    try {
-      const supabase = getSupabaseBrowserClient();
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: `${siteUrl}/auth/callback` },
-      });
-      if (error) {
-        setError(error.message || "Failed to resend code.");
-        return;
-      }
-      setInfo("Code resent. Check your inbox.");
-      setCanResendAt(Date.now() + 60_000);
-    } catch (e: any) {
-      setError(e?.message || "Unexpected error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const resendWait = Math.max(0, Math.ceil((canResendAt - Date.now()) / 1000));
-  useEffect(() => {
-    if (step !== "otp") return;
-    const t = setInterval(() => {
-      // force re-render every second for counter
-      setCanResendAt((v) => v);
-    }, 1000);
-    return () => clearInterval(t);
-  }, [step]);
 
   async function onGoogleSignUp() {
     const { getSupabaseBrowserClient } = await import("@/lib/supabase/client");
@@ -171,7 +109,6 @@ export default function SignUpPage() {
 
       {/* Signup form */}
       <section className="mx-auto w-full max-w-3xl px-6 pb-10">
-        {step === "form" ? (
           <form onSubmit={onSubmit} className="animate-element rounded-2xl border border-border bg-card/70 p-6 shadow-sm">
             <h2 className="text-xl md:text-2xl font-semibold">Create your account</h2>
             <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -201,7 +138,7 @@ export default function SignUpPage() {
             <p className="mt-4 text-xs text-muted-foreground">Your details are safe with us — used only for Samithi communication.</p>
 
             <div className="mt-6 flex justify-center">
-              <GradientButton className="min-w-[220px] text-[17px]" disabled={loading}>{loading ? "Sending..." : "Send Code"}</GradientButton>
+              <GradientButton className="min-w-[220px] text-[17px]" disabled={loading}>{loading ? "Creating…" : "Create Account"}</GradientButton>
             </div>
 
             <div className="mt-6 relative flex items-center justify-center">
@@ -217,25 +154,6 @@ export default function SignUpPage() {
               Continue with Google
             </button>
           </form>
-        ) : (
-          <form onSubmit={onVerify} className="animate-element rounded-2xl border border-border bg-card/70 p-6 shadow-sm">
-            <h2 className="text-xl md:text-2xl font-semibold">Verify your email</h2>
-            <p className="mt-2 text-sm text-muted-foreground">We sent a code to {email}. Enter it below to create your account.</p>
-            <div className="mt-5 grid grid-cols-1 gap-4">
-              <Field label="Verification Code" required>
-                <Input inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} placeholder="6-digit code" />
-              </Field>
-            </div>
-            {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-            {info ? <p className="mt-3 text-sm text-emerald-600">{info}</p> : null}
-            <div className="mt-6 flex items-center justify-between">
-              <button type="button" onClick={onResend} disabled={loading || resendWait > 0} className="text-sm underline underline-offset-4 disabled:opacity-50">
-                {resendWait > 0 ? `Resend in ${resendWait}s` : "Resend code"}
-              </button>
-              <GradientButton className="min-w-[160px]" disabled={loading}>{loading ? "Verifying..." : "Verify & Create"}</GradientButton>
-            </div>
-          </form>
-        )}
       </section>
 
       {/* Community benefits */}

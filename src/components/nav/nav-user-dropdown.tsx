@@ -13,6 +13,7 @@ export default function NavUserDropdown() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string>("User");
   const [email, setEmail] = useState<string>("");
+  const [hasGoogle, setHasGoogle] = useState<boolean>(false);
   const { show } = useAlert();
   const anchorRef = useRef<HTMLDivElement>(null);
   const supabaseRef = useRef<ReturnType<any> | null>(null);
@@ -49,6 +50,11 @@ export default function NavUserDropdown() {
             let name = (user.user_metadata?.full_name || user.user_metadata?.name || "").toString();
             let photo = (user.user_metadata?.avatar_url || user.user_metadata?.picture || "").toString();
             setEmail(user.email || "");
+            try {
+              const identities: any[] = (user as any)?.identities || [];
+              const providers = Array.isArray(identities) ? identities.map((i) => i.provider) : [];
+              setHasGoogle(providers.includes("google"));
+            } catch { setHasGoogle(false); }
             try {
               let { data: row } = await supabase
                 .from("Profile-Table")
@@ -146,6 +152,27 @@ export default function NavUserDropdown() {
     try { router.replace("/"); } catch {}
     // Fallback if router is unavailable for any reason
     if (typeof window !== "undefined") window.location.assign("/");
+  };
+
+  const linkGoogle = async () => {
+    try {
+      let supabase = supabaseRef.current as any;
+      if (!supabase) {
+        const mod = await import("@/lib/supabase/client");
+        supabase = mod.getSupabaseBrowserClient();
+        supabaseRef.current = supabase;
+      }
+      const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, "");
+      const redirectTo = `${siteUrl}/auth/callback`;
+      const { error } = await supabase.auth.linkIdentity({ provider: "google", options: { redirectTo } as any });
+      if (error) {
+        show({ title: "Link failed", description: error.message, variant: "error" });
+        return;
+      }
+      show({ title: "Continue with Google", description: "Complete linking in the Google window.", variant: "info" });
+    } catch (e: any) {
+      show({ title: "Link failed", description: e?.message || "Unexpected error", variant: "error" });
+    }
   };
 
   const onTriggerClick = () => {
@@ -246,6 +273,25 @@ export default function NavUserDropdown() {
                   <span>Add account</span>
                 </div>
               </button>
+              {loggedIn ? (
+                hasGoogle ? (
+                  <button disabled className="rounded-2xl border px-4 py-3 text-sm text-left opacity-60" title="Google already linked">
+                    <div className="flex items-center gap-2">
+                      <span className="grid place-items-center h-6 w-6 rounded-full border">G</span>
+                      <span>Google linked</span>
+                    </div>
+                  </button>
+                ) : (
+                  <button onClick={linkGoogle} className="rounded-2xl border px-4 py-3 text-sm text-left hover:bg-black/5 dark:hover:bg-white/10">
+                    <div className="flex items-center gap-2">
+                      <span className="grid place-items-center h-6 w-6 rounded-full border">G</span>
+                      <span>Link Google</span>
+                    </div>
+                  </button>
+                )
+              ) : (
+                <div />
+              )}
               <button
                 onClick={loggedIn ? logout : login}
                 className="rounded-2xl border px-4 py-3 text-sm text-left hover:bg-black/5 dark:hover:bg-white/10"

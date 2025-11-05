@@ -66,18 +66,26 @@ export default function AdminDonationsPage() {
 
   const downloadPDF = async () => {
     if (!rows || rows.length === 0) { alert("Nothing to download. Load donations first."); return; }
+    const fmtTs = (s: string) => {
+      if (!s) return "";
+      const d = new Date(s);
+      if (Number.isNaN(d.getTime())) return (s || "").slice(0, 19).replace('T',' ');
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    const pretty = rows.map(r => ({ ...r, created_at: fmtTs(r.created_at) }));
     await createTablePDF(
       "Donations",
       undefined,
       [
-        { key: "created_at", label: "Created", w: 140 },
-        { key: "name", label: "Name", w: 180 },
-        { key: "email", label: "Email", w: 220 },
-        { key: "phone", label: "Phone", w: 130 },
-        { key: "amount", label: "Amount", w: 100, align: "right" },
-        { key: "status", label: "Status", w: 100 },
+        { key: "created_at", label: "Created", w: 130 },
+        { key: "name", label: "Name", w: 170 },
+        { key: "email", label: "Email", w: 200 },
+        { key: "phone", label: "Phone", w: 110 },
+        { key: "amount", label: "Amount", w: 90, align: "right" },
+        { key: "status", label: "Status", w: 90 },
       ],
-      rows,
+      pretty,
       `donations`
     );
   };
@@ -141,5 +149,4 @@ export default function AdminDonationsPage() {
     </AdminGuard>
   );
 }
-
 

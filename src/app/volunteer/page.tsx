@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { GradientButton } from "@/components/ui/gradient-button";
 import { CalendarDays, Clock, HeartHandshake } from "lucide-react";
 import { sendEmail } from "@/lib/email";
+import { hasIdentityDocument } from "@/lib/profile/identity";
+import { useAlert } from "@/components/ui/alert-provider";
 
 type VolunteerEntry = {
   id: string;
@@ -22,6 +24,7 @@ type VolunteerEntry = {
 };
 
 export default function VolunteerPage() {
+  const { show } = useAlert();
   const season = { start: "November 5th", end: "January 7th" };
   const sessions = [
     { name: "Morning" as const, time: "12:00 AM – 3:00 PM" },
@@ -52,6 +55,18 @@ export default function VolunteerPage() {
         const supabase = getSupabaseBrowserClient();
         const { data: userRes } = await supabase.auth.getUser();
         user_id = userRes?.user?.id;
+        // Require Aadhaar/PAN before booking volunteer slot as well
+        try {
+          const ok = await hasIdentityDocument(supabase as any);
+          if (!ok) {
+            const next = window.location.pathname + window.location.search;
+            show({ title: "Identity document required", description: "Please upload Aadhaar or PAN in your profile. Redirecting in 5 seconds…", variant: "warning", durationMs: 5000 });
+            setTimeout(() => {
+              try { window.location.assign("/profile/edit?next=" + encodeURIComponent(next)); } catch {}
+            }, 5000);
+            return;
+          }
+        } catch {}
       }
     } catch {}
     try {

@@ -64,10 +64,21 @@ export default function Page() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       // Friendly hint if account exists with Google
+      const unconfirmed = /email not confirmed/i.test(error.message);
       const hint = /invalid login|invalid credentials|email not confirmed/i.test(error.message)
         ? "\nIf you previously used Google with this email, please use 'Continue with Google'."
         : "";
       show({ title: "Sign-in failed", description: error.message + hint, variant: "error", durationMs: 5000 });
+      // If the issue is unconfirmed email, auto-resend the confirmation email
+      if (unconfirmed) {
+        try {
+          const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, "");
+          const r = await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: `${siteUrl}/auth/callback` } as any });
+          if (!r.error) {
+            show({ title: "Verification email resent", description: "Check your inbox to confirm, then sign in.", variant: "info", durationMs: 6000 });
+          }
+        } catch {}
+      }
       return;
     }
     // Ensure profile exists and decide destination

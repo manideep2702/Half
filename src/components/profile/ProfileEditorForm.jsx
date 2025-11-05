@@ -1,12 +1,18 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useAlert } from "@/components/ui/alert-provider";
 
-export default function ProfileEditorForm({ initialValue, onSave, onCancel, onImageFileUpload }) {
+export default function ProfileEditorForm({ initialValue, onSave, onCancel, onImageFileUpload, onAadhaarUpload, onPanUpload }) {
   const [name, setName] = useState(initialValue?.name || "");
   const [designation, setDesignation] = useState(initialValue?.designation || "");
   const [tagline, setTagline] = useState(initialValue?.tagline || "");
   const [imageUrl, setImageUrl] = useState(initialValue?.imageUrl || "");
+  const [aadhaarUrl, setAadhaarUrl] = useState(initialValue?.aadhaarUrl || "");
+  const [panUrl, setPanUrl] = useState(initialValue?.panUrl || "");
+  const [docChoice, setDocChoice] = useState((initialValue?.aadhaarUrl ? 'aadhaar' : (initialValue?.panUrl ? 'pan' : 'aadhaar')));
+  const [saving, setSaving] = useState(false);
+  const { show } = useAlert();
   const [bioParagraphs, setBioParagraphs] = useState(
     Array.isArray(initialValue?.bioParagraphs) && initialValue.bioParagraphs.length > 0
       ? initialValue.bioParagraphs
@@ -27,6 +33,9 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
     setDesignation(initialValue?.designation || "");
     setTagline(initialValue?.tagline || "");
     setImageUrl(initialValue?.imageUrl || "");
+    setAadhaarUrl(initialValue?.aadhaarUrl || "");
+    setPanUrl(initialValue?.panUrl || "");
+    setDocChoice((initialValue?.aadhaarUrl ? 'aadhaar' : (initialValue?.panUrl ? 'pan' : 'aadhaar')));
     setBioParagraphs(
       Array.isArray(initialValue?.bioParagraphs) && initialValue.bioParagraphs.length > 0
         ? initialValue.bioParagraphs
@@ -77,12 +86,13 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
     if (!designation.trim()) errs.designation = "Designation is required";
     if (!tagline.trim()) errs.tagline = "Tagline is required";
     if (!hasImage) errs.imageUrl = "Profile photo is required";
+    if (!(aadhaarUrl || panUrl)) errs.document = "Upload either Aadhaar or PAN";
     if (normalizedBios.length === 0) errs.bioParagraphs = "At least one bio paragraph is required";
     if (normalizedHighlights.length === 0) errs.highlights = "At least one highlight is required";
     return { errs, normalizedBios, normalizedHighlights };
   };
 
-  const save = () => {
+  const save = async () => {
     const { errs, normalizedBios, normalizedHighlights } = validate();
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
@@ -92,6 +102,7 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
         const el = document.querySelector(`[data-field="${firstKey}"]`);
         if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ behavior: "smooth", block: "center" });
       } catch {}
+      try { show({ title: "Fix form errors", description: "Upload Aadhaar or PAN and fill required fields.", variant: "warning" }); } catch {}
       return;
     }
     const next = {
@@ -100,11 +111,19 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
       designation: designation.trim(),
       tagline: tagline.trim(),
       imageUrl: imageUrl || initialValue?.imageUrl || "",
+      aadhaarUrl: aadhaarUrl || initialValue?.aadhaarUrl || "",
+      panUrl: panUrl || initialValue?.panUrl || "",
       bioParagraphs: normalizedBios,
       highlights: normalizedHighlights,
       // Details removed
     };
-    onSave?.(next);
+    try {
+      setSaving(true);
+      await onSave?.(next);
+      try { show({ title: "Saved", description: "Profile updated successfully.", variant: "success" }); } catch {}
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -176,6 +195,67 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
             <p className="mt-1 text-xs text-muted-foreground">Max 4MB. JPG/PNG recommended.</p>
             {errors.imageUrl && <p className="mt-1 text-xs text-red-400">{errors.imageUrl}</p>}
           </label>
+        </div>
+
+        {/* Identity document selection (upload Aadhaar OR PAN) */}
+        <div className="md:col-span-2 mt-4">
+          <span className="mb-1 block text-xs font-medium text-foreground">Identity Document *</span>
+          <div className="mt-2 flex items-center gap-6 text-sm">
+            <label className="inline-flex items-center gap-2">
+              <input type="radio" name="docChoice" value="aadhaar" checked={docChoice === 'aadhaar'} onChange={() => setDocChoice('aadhaar')} />
+              Aadhaar
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input type="radio" name="docChoice" value="pan" checked={docChoice === 'pan'} onChange={() => setDocChoice('pan')} />
+              PAN
+            </label>
+          </div>
+          <div className="mt-3 flex items-center gap-4">
+            {docChoice === 'aadhaar' ? (
+              aadhaarUrl ? (
+                aadhaarUrl.endsWith('.pdf') ? (
+                  <a href={aadhaarUrl} target="_blank" rel="noopener noreferrer" className="text-xs underline">View file</a>
+                ) : (
+                  <img src={aadhaarUrl} alt="Aadhaar" className="h-16 w-16 rounded object-cover ring-1 ring-border" />
+                )
+              ) : null
+            ) : (
+              panUrl ? (
+                panUrl.endsWith('.pdf') ? (
+                  <a href={panUrl} target="_blank" rel="noopener noreferrer" className="text-xs underline">View file</a>
+                ) : (
+                  <img src={panUrl} alt="PAN" className="h-16 w-16 rounded object-cover ring-1 ring-border" />
+                )
+              ) : null
+            )}
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                try {
+                  if (docChoice === 'aadhaar') {
+                    if (typeof onAadhaarUpload === 'function') {
+                      const url = await onAadhaarUpload(f);
+                      setAadhaarUrl(url);
+                    }
+                  } else {
+                    if (typeof onPanUpload === 'function') {
+                      const url = await onPanUpload(f);
+                      setPanUrl(url);
+                    }
+                  }
+                } catch (err) {
+                  alert((err?.message || 'Upload failed').toString());
+                }
+              }}
+              className="w-full cursor-pointer rounded-xl bg-white/5 px-4 py-2.5 text-sm ring-1 ring-border file:mr-3 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-sm hover:file:bg-white/20 focus:ring-2 focus:outline-none"
+              aria-label="Upload identity document"
+            />
+          </div>
+          {errors.document && <p className="mt-1 text-xs text-red-400">{errors.document}</p>}
+          <p className="mt-1 text-xs text-muted-foreground">Choose Aadhaar or PAN and upload an image or PDF (max 5MB). Only one is required.</p>
         </div>
 
         {/* About section */}
@@ -268,10 +348,11 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
           <button
             type="button"
             onClick={save}
-            className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-amber-600 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+            disabled={saving}
+            className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-amber-600 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-60"
             aria-label="Save profile"
           >
-            Save Changes
+            {saving ? "Saving…" : "Save Changes"}
           </button>
           <button
             type="button"

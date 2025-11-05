@@ -14,6 +14,8 @@ type ProfileData = {
   imageUrl?: string;
   bioParagraphs?: string[];
   highlights?: string[];
+  aadhaarUrl?: string;
+  panUrl?: string;
 };
 
 export default function EditProfilePage() {
@@ -26,6 +28,8 @@ export default function EditProfilePage() {
     imageUrl: "",
     bioParagraphs: [""],
     highlights: [""],
+    aadhaarUrl: "",
+    panUrl: "",
   });
 
   useEffect(() => {
@@ -62,6 +66,8 @@ export default function EditProfilePage() {
           imageUrl: (data.image_url || data.avatar_url || prev.imageUrl) as string,
           bioParagraphs: Array.isArray(data.bio_paragraphs) ? (data.bio_paragraphs as string[]) : prev.bioParagraphs,
           highlights: Array.isArray(data.highlights) ? (data.highlights as string[]) : prev.highlights,
+          aadhaarUrl: (data.aadhaar_url || data.aadhar_url || prev.aadhaarUrl || "") as string,
+          panUrl: (data.pan_url || prev.panUrl || "") as string,
         }));
       }
     };
@@ -83,6 +89,8 @@ export default function EditProfilePage() {
       tagline: next.tagline || "",
       avatar_url: next.imageUrl || "",
       image_url: next.imageUrl || "",
+      aadhaar_url: next.aadhaarUrl || "",
+      pan_url: next.panUrl || "",
       bio_paragraphs: Array.isArray(next.bioParagraphs) ? next.bioParagraphs : [],
       highlights: Array.isArray(next.highlights) ? next.highlights : [],
     } as Record<string, any>;
@@ -112,7 +120,13 @@ export default function EditProfilePage() {
       return;
     }
     show({ title: "Profile updated", description: "Your changes have been saved.", variant: "success" });
-    router.push("/");
+    try {
+      const url = new URL(window.location.href);
+      const nextUrl = url.searchParams.get('next');
+      router.push(nextUrl || "/");
+    } catch {
+      router.push("/");
+    }
   };
 
   const handleCancel = () => {
@@ -137,6 +151,45 @@ export default function EditProfilePage() {
     return url;
   }
 
+  async function uploadToPanAadhaarBucket(kind: "aadhaar" | "pan", file: File): Promise<string> {
+    const supabase = getSupabaseBrowserClient();
+    const { data: userRes } = await supabase.auth.getUser();
+    const user = userRes?.user;
+    if (!user) throw new Error("Not signed in");
+    const email = (user.email || "user").toLowerCase();
+    const safe = email.replace(/[^a-z0-9._-]/gi, "_");
+    const ext = (file.name.split(".").pop() || (file.type?.includes("png") ? "png" : file.type?.includes("jpeg") ? "jpg" : "jpg"));
+    const path = `${kind}/${safe}.${ext}`;
+    const bucket = "PAN-Aadhar"; // public bucket created by user
+    const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: true, cacheControl: "3600" });
+    if (upErr) throw upErr;
+    const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
+    return pub.publicUrl;
+  }
+
+  async function handleAadhaarUpload(file: File): Promise<string> {
+    if (!file) throw new Error("No file provided");
+    // Basic guard: up to 5MB, image or pdf accepted
+    if (!(file.type?.startsWith("image/") || file.type === "application/pdf")) {
+      throw new Error("Please upload an image or PDF");
+    }
+    if (file.size > 5 * 1024 * 1024) throw new Error("Max file size 5MB");
+    const url = await uploadToPanAadhaarBucket("aadhaar", file);
+    setValue((v) => ({ ...v, aadhaarUrl: url }));
+    return url;
+  }
+
+  async function handlePanUpload(file: File): Promise<string> {
+    if (!file) throw new Error("No file provided");
+    if (!(file.type?.startsWith("image/") || file.type === "application/pdf")) {
+      throw new Error("Please upload an image or PDF");
+    }
+    if (file.size > 5 * 1024 * 1024) throw new Error("Max file size 5MB");
+    const url = await uploadToPanAadhaarBucket("pan", file);
+    setValue((v) => ({ ...v, panUrl: url }));
+    return url;
+  }
+
   return (
     <RequireAuth>
       <main className="min-h-screen bg-background text-foreground">
@@ -150,7 +203,14 @@ export default function EditProfilePage() {
               ← Back
             </button>
           </div>
-          <ProfileEditorForm initialValue={value} onSave={handleSave} onCancel={handleCancel} onImageFileUpload={handleUpload} />
+          <ProfileEditorForm
+            initialValue={value}
+            onSave={handleSave}
+            onCancel={handleCancel}
+            onImageFileUpload={handleUpload}
+            onAadhaarUpload={handleAadhaarUpload}
+            onPanUpload={handlePanUpload}
+          />
         </div>
       </main>
     </RequireAuth>

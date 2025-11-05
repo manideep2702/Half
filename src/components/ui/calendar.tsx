@@ -9,6 +9,8 @@ type CalendarProps = {
   selected?: Date;
   onSelect?: (date?: Date) => void;
   disabled?: (date: Date) => boolean;
+  // Optional: visually mark completed dates (e.g., past/finished sessions)
+  completed?: (date: Date) => boolean;
   fromDate?: Date;
   toDate?: Date;
   className?: string;
@@ -22,7 +24,7 @@ function startWeekday(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 
-export function Calendar({ selected, onSelect, disabled, fromDate, toDate, className }: CalendarProps) {
+export function Calendar({ selected, onSelect, disabled, completed, fromDate, toDate, className }: CalendarProps) {
   const initial = selected ?? new Date();
   const [viewYear, setViewYear] = React.useState(initial.getFullYear());
   const [viewMonth, setViewMonth] = React.useState(initial.getMonth());
@@ -101,6 +103,7 @@ export function Calendar({ selected, onSelect, disabled, fromDate, toDate, class
           row.map((d, j) => {
             if (!d) return <div key={`${i}-${j}`} />;
             const disabledDay = isDisabled(d);
+            const completedDay = !disabledDay && (completed?.(d) ?? false);
             const selectedDay = isSameDay(d, selected);
             const todayDay = isSameDay(d, today);
             return (
@@ -119,7 +122,10 @@ export function Calendar({ selected, onSelect, disabled, fromDate, toDate, class
                 title={disabledDay ? "Out of Annadanam season" : undefined}
               >
                 <span className="relative inline-flex items-center justify-center w-full h-full">
-                  <span className={cn(disabledDay ? "line-through" : "")}>{d.getDate()}</span>
+                  <span className={cn(
+                    disabledDay ? "line-through" : "",
+                    completedDay ? "line-through text-muted-foreground" : "",
+                  )}>{d.getDate()}</span>
                   {disabledDay ? (
                     <span
                       aria-hidden

@@ -16,6 +16,22 @@ export default function AdminAnnadanamPage() {
   const router = useRouter();
   const { show } = useAlert();
 
+  // Mark bookings that have already completed based on date + session end time
+  const hasCompleted = (dateStr?: string, session?: string) => {
+    if (!dateStr || !session) return false;
+    // session format: "H:MM AM - H:MM PM"
+    const endPart = (session.split("-")[1] || "").trim();
+    const m = endPart.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!m) return new Date(dateStr) < new Date(new Date().toISOString().slice(0,10));
+    let [_, hh, mm, ap] = m;
+    let h = parseInt(hh, 10) % 12; // 12 -> 0 initially
+    if (ap.toUpperCase() === "PM") h += 12;
+    const end = new Date(dateStr + "T00:00:00");
+    if (Number.isNaN(end.getTime())) return false;
+    end.setHours(h, parseInt(mm, 10), 0, 0);
+    return new Date() >= end;
+  };
+
   const toCSV = (data: any[], headers: string[], filename: string) => {
     const esc = (v: unknown) => {
       const s = (v ?? "").toString();
@@ -81,15 +97,11 @@ export default function AdminAnnadanamPage() {
       "Annadanam Bookings",
       annaDate || undefined,
       [
-        { key: "id", label: "ID", w: 70 },
-        { key: "created_at", label: "Created At", w: 130 },
         { key: "date", label: "Date", w: 90 },
-        { key: "session", label: "Session", w: 130, align: "center" },
+        { key: "session", label: "Session", w: 120, align: "center" },
         { key: "name", label: "Name", w: 180 },
         { key: "email", label: "Email", w: 220 },
-        { key: "phone", label: "Phone", w: 130 },
-        { key: "qty", label: "Qty", w: 50, align: "right" },
-        { key: "status", label: "Status", w: 100 },
+        { key: "phone", label: "Phone", w: 120 },
       ],
       rows,
       `annadanam-bookings${annaDate ? `-${annaDate}` : ""}`
@@ -150,10 +162,12 @@ export default function AdminAnnadanamPage() {
                     {rows.length === 0 ? (
                       <tr><td className="px-3 py-3" colSpan={8}>No records.</td></tr>
                     ) : (
-                      rows.map((r, i) => (
+                      rows.map((r, i) => {
+                        const completed = hasCompleted(r.date, r.session);
+                        return (
                         <tr key={i} className="border-t">
-                          <td className="px-3 py-2">{r.date}</td>
-                          <td className="px-3 py-2">{r.session}</td>
+                          <td className={`px-3 py-2 ${completed ? 'line-through text-muted-foreground' : ''}`}>{r.date}</td>
+                          <td className={`px-3 py-2 ${completed ? 'line-through text-muted-foreground' : ''}`}>{r.session}</td>
                           <td className="px-3 py-2">{r.name}</td>
                           <td className="px-3 py-2">{r.email}</td>
                           <td className="px-3 py-2">{r.phone}</td>
@@ -161,7 +175,7 @@ export default function AdminAnnadanamPage() {
                           <td className="px-3 py-2">{r.status}</td>
                           <td className="px-3 py-2">{r.created_at?.slice(0,19).replace('T',' ')}</td>
                         </tr>
-                      ))
+                      );})
                     )}
                   </tbody>
                 </table>
@@ -173,5 +187,3 @@ export default function AdminAnnadanamPage() {
     </AdminGuard>
   );
 }
-
-

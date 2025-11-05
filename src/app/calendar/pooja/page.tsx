@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { useAlert } from "@/components/ui/alert-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { sendEmail } from "@/lib/email";
+import { hasIdentityDocument } from "@/lib/profile/identity";
 
 const START = new Date(2025, 10, 5); // Nov 5, 2025 local
 const END = new Date(2026, 0, 7); // Jan 7, 2026 local
@@ -61,6 +62,19 @@ export default function PoojaBookingPage() {
       }
       setSubmitting(true);
       const supabase = getSupabaseBrowserClient();
+      // Require Aadhaar/PAN before booking
+      try {
+        const ok = await hasIdentityDocument(supabase as any);
+        if (!ok) {
+          const next = window.location.pathname + window.location.search;
+          show({ title: "Identity document required", description: "Please upload Aadhaar or PAN in your profile. Redirecting in 5 seconds…", variant: "warning", durationMs: 5000 });
+          setTimeout(() => {
+            try { window.location.assign("/profile/edit?next=" + encodeURIComponent(next)); } catch {}
+          }, 5000);
+          setSubmitting(false);
+          return;
+        }
+      } catch {}
       const { data: userRes } = await supabase.auth.getUser();
       const user = userRes?.user;
       if (!user?.id) {

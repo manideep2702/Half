@@ -13,6 +13,7 @@ import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAlert } from "@/components/ui/alert-provider";
 import { sendEmail } from "@/lib/email";
+import { hasIdentityDocument } from "@/lib/profile/identity";
 
 // Session label now represents a fixed time range (e.g., "12:45 PM - 1:30 PM")
 type Session = string;
@@ -314,6 +315,20 @@ export default function AnnadanamBooking() {
 
   const selectedDateKey = useMemo(() => formatDate(selectedDate), [selectedDate]);
 
+  // Consider a date "completed" when its last session has ended.
+  const isDateCompleted = React.useCallback((d: Date) => {
+    // Normalize comparison to local midnight
+    const today = new Date();
+    const todayKey = formatDate(today);
+    const dateKey = formatDate(d);
+    if (dateKey < todayKey) return true; // strictly in the past
+    if (dateKey > todayKey) return false; // future
+    // Today: completed if last session end has passed (10:00 PM local)
+    const [eh, em] = (EVENING_SLOTS[EVENING_SLOTS.length - 1].end || "22:00").split(":").map((v) => parseInt(v, 10));
+    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), eh || 22, em || 0, 0, 0);
+    return new Date() >= end;
+  }, []);
+
   // Expand calendar navigation range to include extra special dates
   const CAL_START = useMemo(() => {
     if (EXTRA_DATES.length === 0) return SEASON_START;
@@ -451,6 +466,18 @@ export default function AnnadanamBooking() {
     }
     try {
       const supabase = await ensure();
+      // Block booking if Aadhaar/PAN not uploaded
+      try {
+        const ok = await hasIdentityDocument(supabase);
+        if (!ok) {
+          const next = window.location.pathname + window.location.search;
+          show({ title: "Identity document required", description: "Please upload Aadhaar or PAN in Profile → Edit. Redirecting in 5 seconds…", variant: "warning", durationMs: 5000 });
+          setTimeout(() => {
+            try { window.location.assign("/profile/edit?next=" + encodeURIComponent(next)); } catch {}
+          }, 5000);
+          return;
+        }
+      } catch {}
       const { data: userRes } = await supabase.auth.getUser();
       const user = userRes?.user;
       if (!user) {
@@ -515,6 +542,7 @@ export default function AnnadanamBooking() {
                 selected={selectedDate}
                 onSelect={(date) => date && inSeason(date, now) && setSelectedDate(date)}
                 disabled={(date) => !inSeason(date, now)}
+                completed={isDateCompleted}
                 className="rounded-lg border-0"
                 fromDate={CAL_START}
                 toDate={CAL_END}
