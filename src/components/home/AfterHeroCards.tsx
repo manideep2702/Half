@@ -102,7 +102,7 @@ function AnnadanamCard() {
   ];
   return (
     <div className="w-full h-full bg-white p-6">
-      <h3 className="text-center text-sm font-semibold tracking-widest text-amber-700">UPCOMING ANNADANAM</h3>
+      <h3 className="text-center text-sm font-semibold tracking-widest text-amber-700">UPCOMING ANNADANAM SEVA</h3>
       <p className="mt-3 text-sm text-neutral-700 text-center">Daily seva slots during Annadanam season</p>
       <p className="mt-1 text-xs text-neutral-600 text-center">Next date: <span className="font-medium text-indigo-900">{nextDateLabel}</span></p>
       <div className="mt-4 mx-auto w-full max-w-md overflow-hidden rounded-lg border border-amber-200">

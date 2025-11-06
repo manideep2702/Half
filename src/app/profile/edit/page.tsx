@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAlert } from "@/components/ui/alert-provider";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import ProfileEditorForm from "@/components/profile/ProfileEditorForm";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import RequireAuth from "@/components/auth/require-auth";
@@ -20,7 +20,7 @@ type ProfileData = {
 
 export default function EditProfilePage() {
   const router = useRouter();
-  const search = useSearchParams();
+  const [requireDocs, setRequireDocs] = useState(false);
   const { show } = useAlert();
   const [value, setValue] = useState<ProfileData>({
     name: "",
@@ -39,7 +39,7 @@ export default function EditProfilePage() {
       const { data: userRes } = await supabase.auth.getUser();
       const user = userRes?.user;
       if (!user) {
-        router.replace("/sign-in/?next=/profile/edit");
+        router.replace("/sign-in/?next=/profile/edit/");
         return;
       }
       // Load profile from Supabase if present
@@ -75,12 +75,21 @@ export default function EditProfilePage() {
     run();
   }, [router]);
 
+  useEffect(() => {
+    try {
+      const url = new URL(typeof window !== 'undefined' ? window.location.href : 'http://localhost');
+      setRequireDocs(url.searchParams.get('require_docs') === '1');
+    } catch {
+      setRequireDocs(false);
+    }
+  }, []);
+
   const handleSave = async (next: ProfileData) => {
     const supabase = getSupabaseBrowserClient();
     const { data: userRes } = await supabase.auth.getUser();
     const user = userRes?.user;
     if (!user) {
-      router.replace("/sign-in/?next=/profile/edit");
+      router.replace("/sign-in/?next=/profile/edit/");
       return;
     }
     const payloadBase = {
@@ -197,9 +206,8 @@ export default function EditProfilePage() {
         <div className="mx-auto max-w-4xl px-4 pt-28 pb-12">
           {/* Banner prompting for Aadhaar/PAN when required */}
           {(() => {
-            const flag = search?.get("require_docs") === "1";
             const missingDocs = !(value?.aadhaarUrl || value?.panUrl);
-            if (flag || missingDocs) {
+            if (requireDocs || missingDocs) {
               return (
                 <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-600">
                   Please upload either Aadhaar or PAN to complete your profile.

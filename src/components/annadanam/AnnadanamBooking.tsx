@@ -473,7 +473,7 @@ export default function AnnadanamBooking() {
           const next = window.location.pathname + window.location.search;
           show({ title: "Identity document required", description: "Please upload Aadhaar or PAN in Profile → Edit. Redirecting in 5 seconds…", variant: "warning", durationMs: 5000 });
           setTimeout(() => {
-            try { window.location.assign("/profile/edit?next=" + encodeURIComponent(next)); } catch {}
+            try { window.location.assign("/profile/edit/?next=" + encodeURIComponent(next)); } catch {}
           }, 5000);
           return;
         }

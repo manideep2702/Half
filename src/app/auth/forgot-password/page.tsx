@@ -146,7 +146,7 @@ export default function ForgotPasswordPage() {
         return;
       }
       setMsg("Password updated. You can now sign in.");
-      setTimeout(() => router.replace("/sign-in"), 1200);
+      setTimeout(() => router.replace("/sign-in/"), 1200);
     } catch (e: any) {
       setErr(e?.message || "Unexpected error");
     } finally {
@@ -207,5 +207,4 @@ export default function ForgotPasswordPage() {
     </main>
   );
 }
-
 

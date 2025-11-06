@@ -2,10 +2,12 @@
 
 import { SignInPage, Testimonial } from "@/components/ui/sign-in";
 import { useAlert } from "@/components/ui/alert-provider";
+import { useRouter } from "next/navigation";
 
 const sampleTestimonials: Testimonial[] = [];
 
 export default function Page() {
+  const router = useRouter();
   const { show } = useAlert();
   const hasSupabaseEnv = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -36,7 +38,7 @@ export default function Page() {
           adminJson = await adminRes.json().catch(() => null);
         }
         if (adminJson?.ok === true) {
-          window.location.assign("/admin");
+          router.replace("/admin/");
           return;
         }
         // If the route is missing (static export) or any non-OK, continue with normal sign-in instead of blocking
@@ -128,18 +130,19 @@ export default function Page() {
         const missingDocs = !(row?.aadhaar_url || row?.aadhar_url || row?.pan_url);
         show({ title: "Welcome", description: `${displayName}`, variant: "success" });
         if (needsCompletion || missingDocs) {
-          window.location.assign("/profile/edit?require_docs=1");
+          router.replace("/profile/edit/?require_docs=1");
         } else if (nextParam) {
-          window.location.assign(nextParam);
+          // Preserve provided next param as-is (may already include slash)
+          router.replace(nextParam);
         } else {
-          window.location.assign("/");
+          router.replace("/");
         }
         return;
       }
     } catch {}
 
     // Fallback
-    window.location.assign("/");
+    router.replace("/");
   };
 
   const handleGoogleSignIn = async () => {
@@ -163,11 +166,11 @@ export default function Page() {
   };
 
   const handleResetPassword = async () => {
-    window.location.assign("/auth/forgot-password");
+    router.push("/auth/forgot-password/");
   };
 
   const handleCreateAccount = () => {
-    window.location.assign("/sign-up");
+    router.push("/sign-up/");
   };
 
   return (

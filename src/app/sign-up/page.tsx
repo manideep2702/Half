@@ -5,6 +5,7 @@ import { GradientButton } from "@/components/ui/gradient-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { CalendarDays, BookOpenText, HeartHandshake, CheckCircle } from "lucide-react";
 
@@ -19,6 +20,7 @@ const GoogleIcon = () => (
 );
 
 export default function SignUpPage() {
+  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -209,10 +211,29 @@ export default function SignUpPage() {
     setLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { data: sessionRes } = await supabase.auth.getSession();
+      let { data: sessionRes } = await supabase.auth.getSession();
       if (!sessionRes?.session) {
-        setError("Session expired. Please verify your email again.");
-        return;
+        // Try to re-verify with the same code to refresh session
+        try {
+          if (otpCode) {
+            const { data: vData, error: vErr } = await supabase.auth.verifyOtp({ email, token: otpCode, type: 'email' });
+            if (vErr) {
+              setError(vErr.message || "Session expired. Please verify your email again.");
+              return;
+            }
+            if (!vData?.session) {
+              setError("Session expired. Please verify your email again.");
+              return;
+            }
+            sessionRes = { session: vData.session } as any;
+          } else {
+            setError("Session expired. Please verify your email again.");
+            return;
+          }
+        } catch (e: any) {
+          setError(e?.message || "Session expired. Please verify your email again.");
+          return;
+        }
       }
       const { error: updErr } = await supabase.auth.updateUser({
         password,
@@ -252,7 +273,7 @@ export default function SignUpPage() {
           if (ok.error) ok = await attempt("id", payloadBase);
         }
       } catch {}
-      window.location.assign("/profile/edit");
+      try { router.replace("/profile/"); } catch { window.location.assign("/profile/"); }
     } catch (e: any) {
       setError(e?.message || "Unexpected error");
     } finally {
@@ -266,7 +287,7 @@ export default function SignUpPage() {
     const supabase = getSupabaseBrowserClient();
     try { sessionStorage.setItem("ayya.auth.next", "/profile/edit"); } catch {}
     const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, "");
-    const redirectTo = `${siteUrl}/auth/callback`;
+    const redirectTo = `${siteUrl}/auth/callback/`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo },

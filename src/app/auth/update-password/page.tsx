@@ -25,7 +25,7 @@ export default function UpdatePasswordPage() {
       return;
     }
     alert("Password updated. You are now signed in.");
-    router.replace("/profile");
+    router.replace("/profile/");
   };
 
   return (
@@ -49,4 +49,3 @@ export default function UpdatePasswordPage() {
     </main>
   );
 }
-
