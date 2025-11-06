@@ -99,7 +99,11 @@ export default function NavUserDropdown() {
   }, []);
 
   const login = () => {
-    window.location.href = "/sign-in";
+    try {
+      router.push("/sign-in/");
+    } catch {
+      if (typeof window !== "undefined") window.location.assign("/sign-in/");
+    }
   };
 
   const logout = async () => {
@@ -265,7 +269,7 @@ export default function NavUserDropdown() {
             {/* Primary actions */}
             <div className="grid grid-cols-2 gap-3 px-4 pb-4">
               <button
-                onClick={() => (window.location.href = "/sign-in")}
+                onClick={() => (window.location.href = "/sign-in/")}
                 className="rounded-2xl border px-4 py-3 text-sm text-left hover:bg-black/5 dark:hover:bg-white/10"
               >
                 <div className="flex items-center gap-2">

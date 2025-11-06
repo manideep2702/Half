@@ -67,20 +67,16 @@ export default function AdminAnnadanamPage() {
     setLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { data: s } = await supabase.auth.getSession();
-      const token = s?.session?.access_token;
-      if (!token) throw new Error("Not authenticated");
-      const res = await fetch("/api/admin/annadanam/list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ date: annaDate, session: annaSession }),
+      const sess = annaSession && annaSession !== "all" ? annaSession : null;
+      const { data, error } = await supabase.rpc("admin_list_annadanam_bookings", {
+        start_date: annaDate || null,
+        end_date: annaDate || null,
+        sess,
+        limit_rows: 500,
+        offset_rows: 0,
       });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({} as any));
-        throw new Error(j?.error || `Request failed (${res.status})`);
-      }
-      const j = await res.json();
-      const r: any[] = Array.isArray(j?.rows) ? j.rows : [];
+      if (error) throw error;
+      const r: any[] = Array.isArray(data) ? data : [];
       setRows(r);
       if (r.length === 0) show({ title: "No results", description: "No Annadanam bookings match the filters.", variant: "info" });
     } catch (e: any) {
@@ -127,7 +123,7 @@ export default function AdminAnnadanamPage() {
                 <label className="text-sm" htmlFor="annaSession">Timing</label>
                 <select id="annaSession" className="w-full rounded border px-3 py-2 bg-background" value={annaSession} onChange={(e)=>setAnnaSession(e.target.value)}>
                   <option value="all">All Timings</option>
-                  <option>12:45 PM - 1:30 PM</option>
+                  <option>1:00 PM - 1:30 PM</option>
                   <option>1:30 PM - 2:00 PM</option>
                   <option>2:00 PM - 2:30 PM</option>
                   <option>2:30 PM - 3:00 PM</option>

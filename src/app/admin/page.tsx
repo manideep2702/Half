@@ -140,17 +140,30 @@ export default function AdminPage() {
       const { data: s } = await supabase.auth.getSession();
       const token = s?.session?.access_token;
       if (!token) throw new Error("Not authenticated");
-
-      const res = await fetch("/api/admin/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ start, end }),
-      });
-      if (!res.ok) {
-        const msg = await res.json().catch(() => ({} as any));
-        throw new Error(msg?.error || `Request failed (${res.status})`);
-      }
-      const allData = await res.json();
+      const toIsoTs = (d?: string) => (d ? new Date(d + "T00:00:00").toISOString() : null);
+      const toDate = (d?: string) => (d ? d : null);
+      const [pooja, anna, dons, contacts, vols] = await Promise.all([
+        supabase.rpc("admin_list_pooja_bookings", { start_date: toDate(start), end_date: toDate(end), sess: null, limit_rows: 5000, offset_rows: 0 }),
+        supabase.rpc("admin_list_annadanam_bookings", { start_date: toDate(start), end_date: toDate(end), sess: null, limit_rows: 5000, offset_rows: 0 }),
+        supabase.rpc("admin_list_donations", { start_ts: toIsoTs(start), end_ts: toIsoTs(end), limit_rows: 5000, offset_rows: 0 }),
+        supabase.rpc("admin_list_contact_us", { start_ts: toIsoTs(start), end_ts: toIsoTs(end), limit_rows: 5000, offset_rows: 0 }),
+        supabase.rpc("admin_list_volunteer_bookings", { start_date: toDate(start), end_date: toDate(end), sess: null, limit_rows: 5000, offset_rows: 0 }),
+      ]);
+      const safe = (r: any) => (r?.error ? [] : (Array.isArray(r?.data) ? r.data : []));
+      let profiles: any[] = [];
+      try {
+        const pr = await supabase.from("Profile-Table").select("*").limit(5000);
+        if (!pr.error) profiles = Array.isArray(pr.data) ? pr.data : [];
+      } catch {}
+      const allData = {
+        users: [],
+        profiles,
+        pooja_bookings: safe(pooja),
+        annadanam_bookings: safe(anna),
+        donations: safe(dons),
+        contact_messages: safe(contacts),
+        volunteer_bookings: safe(vols),
+      } as const;
 
       if (format === "json") {
         const blob = new Blob([JSON.stringify(allData, null, 2)], { type: "application/json" });
@@ -212,46 +225,19 @@ export default function AdminPage() {
     setPoojaLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { data: s } = await supabase.auth.getSession();
-      const token = s?.session?.access_token;
-      if (!token) {
-        setPoojaError("Not authenticated");
-        setPoojaRows(null);
-        return;
-      }
-      const res = await fetch("/api/admin/pooja/list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ date: poojaDate, session: poojaSession }),
+      const sess = poojaSession && poojaSession !== "all" ? poojaSession : null;
+      const { data, error } = await supabase.rpc("admin_list_pooja_bookings", {
+        start_date: poojaDate || null,
+        end_date: poojaDate || null,
+        sess,
+        limit_rows: 500,
+        offset_rows: 0,
       });
-      if (!res.ok) {
-        // Fallback to RPC if server route not available or forbidden
-        const sess = poojaSession && poojaSession !== "all" ? poojaSession : null;
-        const { data, error } = await supabase.rpc("admin_list_pooja_bookings", {
-          start_date: poojaDate || null,
-          end_date: poojaDate || null,
-          sess,
-          limit_rows: 500,
-          offset_rows: 0,
-        });
-        if (error) {
-          const j = await res.json().catch(() => ({} as any));
-          setPoojaError(j?.error || error.message || `Request failed (${res.status})`);
-          setPoojaRows(null);
-          return;
-        }
-        const rows = Array.isArray(data) ? data : [];
-        setPoojaRows(rows);
-        if (rows.length === 0) {
-          show({ title: "No results", description: "No pooja bookings match the filters.", variant: "info" });
-        }
-      } else {
-        const j = await res.json();
-        const rows: any[] = Array.isArray(j?.rows) ? j.rows : [];
-        setPoojaRows(rows);
-        if (rows.length === 0) {
-          show({ title: "No results", description: "No pooja bookings match the filters.", variant: "info" });
-        }
+      if (error) throw error;
+      const rows: any[] = Array.isArray(data) ? data : [];
+      setPoojaRows(rows);
+      if (rows.length === 0) {
+        show({ title: "No results", description: "No pooja bookings match the filters.", variant: "info" });
       }
     } catch (e: any) {
       setPoojaError(e?.message || "Failed to load pooja bookings");
@@ -266,26 +252,16 @@ export default function AdminPage() {
     setAnnaLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { data: s } = await supabase.auth.getSession();
-      const token = s?.session?.access_token;
-      if (!token) {
-        setAnnaError("Not authenticated");
-        setAnnaRows(null);
-        return;
-      }
-      const res = await fetch("/api/admin/annadanam/list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ date: annaDate, session: annaSession }),
+      const sess = annaSession && annaSession !== "all" ? annaSession : null;
+      const { data, error } = await supabase.rpc("admin_list_annadanam_bookings", {
+        start_date: annaDate || null,
+        end_date: annaDate || null,
+        sess,
+        limit_rows: 500,
+        offset_rows: 0,
       });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({} as any));
-        setAnnaError(j?.error || `Request failed (${res.status})`);
-        setAnnaRows(null);
-        return;
-      }
-      const j = await res.json();
-      const rows: any[] = Array.isArray(j?.rows) ? j.rows : [];
+      if (error) throw error;
+      const rows: any[] = Array.isArray(data) ? data : [];
       setAnnaRows(rows);
       if (rows.length === 0) {
         show({ title: "No results", description: "No Annadanam bookings match the filters.", variant: "info" });
@@ -432,26 +408,16 @@ export default function AdminPage() {
     setVolLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { data: s } = await supabase.auth.getSession();
-      const token = s?.session?.access_token;
-      if (!token) {
-        setVolError("Not authenticated");
-        setVolRows(null);
-        return;
-      }
-      const res = await fetch("/api/admin/volunteer/list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ start_date: volDate, end_date: volEndDate, session: volSession }),
+      const sess = volSession && volSession !== "all" ? volSession : null;
+      const { data, error } = await supabase.rpc("admin_list_volunteer_bookings", {
+        start_date: volDate || null,
+        end_date: volEndDate || null,
+        sess,
+        limit_rows: 500,
+        offset_rows: 0,
       });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({} as any));
-        setVolError(j?.error || `Request failed (${res.status})`);
-        setVolRows(null);
-        return;
-      }
-      const j = await res.json();
-      const rows: any[] = Array.isArray(j?.rows) ? j.rows : [];
+      if (error) throw error;
+      const rows: any[] = Array.isArray(data) ? data : [];
       setVolRows(rows);
       if (rows.length === 0) {
         show({ title: "No results", description: "No volunteer bookings match the filters.", variant: "info" });

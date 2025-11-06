@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAlert } from "@/components/ui/alert-provider";
 
 export default function ProfileEditorForm({ initialValue, onSave, onCancel, onImageFileUpload, onAadhaarUpload, onPanUpload }) {
-  const [name, setName] = useState(initialValue?.name || "");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [designation, setDesignation] = useState(initialValue?.designation || "");
   const [tagline, setTagline] = useState(initialValue?.tagline || "");
   const [imageUrl, setImageUrl] = useState(initialValue?.imageUrl || "");
@@ -13,40 +14,39 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
   const [docChoice, setDocChoice] = useState((initialValue?.aadhaarUrl ? 'aadhaar' : (initialValue?.panUrl ? 'pan' : 'aadhaar')));
   const [saving, setSaving] = useState(false);
   const { show } = useAlert();
-  const [bioParagraphs, setBioParagraphs] = useState(
-    Array.isArray(initialValue?.bioParagraphs) && initialValue.bioParagraphs.length > 0
-      ? initialValue.bioParagraphs
-      : [""]
-  );
-  const [highlights, setHighlights] = useState(
-    Array.isArray(initialValue?.highlights) && initialValue.highlights.length > 0
-      ? initialValue.highlights
-      : [""]
-  );
-
-  // Details section removed per request
+  // Details/About/Highlights removed per request
 
   const [errors, setErrors] = useState({});
 
+  // Initialize text fields once from initialValue (prevents wiping user input on image upload)
+  const hydratedRef = useRef(false);
   useEffect(() => {
-    setName(initialValue?.name || "");
+    if (hydratedRef.current) return;
+    const hasAny = !!(initialValue?.name || initialValue?.designation || initialValue?.tagline);
+    if (!hasAny) return;
+    const full = String(initialValue?.name || "").trim();
+    if (full) {
+      const parts = full.split(/\s+/);
+      const first = parts.shift() || "";
+      const last = parts.join(" ");
+      setFirstName(first);
+      setLastName(last);
+    } else {
+      setFirstName("");
+      setLastName("");
+    }
     setDesignation(initialValue?.designation || "");
     setTagline(initialValue?.tagline || "");
+    hydratedRef.current = true;
+  }, [initialValue?.name, initialValue?.designation, initialValue?.tagline]);
+
+  // Reflect external changes for image/doc URLs but do not override text fields
+  useEffect(() => {
     setImageUrl(initialValue?.imageUrl || "");
     setAadhaarUrl(initialValue?.aadhaarUrl || "");
     setPanUrl(initialValue?.panUrl || "");
     setDocChoice((initialValue?.aadhaarUrl ? 'aadhaar' : (initialValue?.panUrl ? 'pan' : 'aadhaar')));
-    setBioParagraphs(
-      Array.isArray(initialValue?.bioParagraphs) && initialValue.bioParagraphs.length > 0
-        ? initialValue.bioParagraphs
-        : [""]
-    );
-    setHighlights(
-      Array.isArray(initialValue?.highlights) && initialValue.highlights.length > 0
-        ? initialValue.highlights
-        : [""]
-    );
-  }, [initialValue]);
+  }, [initialValue?.imageUrl, initialValue?.aadhaarUrl, initialValue?.panUrl]);
 
   const onFileChange = async (file) => {
     if (!file) return;
@@ -75,25 +75,19 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
     reader.readAsDataURL(file);
   };
 
-  const normalize = (arr) => arr.map((s) => String(s ?? "").trim()).filter((s) => s);
-
   const validate = () => {
     const errs = {};
-    const normalizedBios = normalize(bioParagraphs);
-    const normalizedHighlights = normalize(highlights);
     const hasImage = !!(imageUrl || initialValue?.imageUrl);
-    if (!name.trim()) errs.name = "Full name is required";
+    if (!firstName.trim()) errs.firstName = "First name is required";
     if (!designation.trim()) errs.designation = "Designation is required";
-    if (!tagline.trim()) errs.tagline = "Tagline is required";
+    // tagline optional
     if (!hasImage) errs.imageUrl = "Profile photo is required";
     if (!(aadhaarUrl || panUrl)) errs.document = "Upload either Aadhaar or PAN";
-    if (normalizedBios.length === 0) errs.bioParagraphs = "At least one bio paragraph is required";
-    if (normalizedHighlights.length === 0) errs.highlights = "At least one highlight is required";
-    return { errs, normalizedBios, normalizedHighlights };
+    return { errs };
   };
 
   const save = async () => {
-    const { errs, normalizedBios, normalizedHighlights } = validate();
+    const { errs } = validate();
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       try {
@@ -105,16 +99,15 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
       try { show({ title: "Fix form errors", description: "Upload Aadhaar or PAN and fill required fields.", variant: "warning" }); } catch {}
       return;
     }
+    const fullName = `${firstName} ${lastName}`.trim();
     const next = {
       ...initialValue,
-      name: name.trim() || initialValue?.name || "",
+      name: fullName || initialValue?.name || "",
       designation: designation.trim(),
       tagline: tagline.trim(),
       imageUrl: imageUrl || initialValue?.imageUrl || "",
       aadhaarUrl: aadhaarUrl || initialValue?.aadhaarUrl || "",
       panUrl: panUrl || initialValue?.panUrl || "",
-      bioParagraphs: normalizedBios,
-      highlights: normalizedHighlights,
       // Details removed
     };
     try {
@@ -132,16 +125,26 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
 
       <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-5">
         <label className="block text-left">
-          <span className="mb-1 block text-xs font-medium text-foreground">Full Name *</span>
+          <span className="mb-1 block text-xs font-medium text-foreground">First Name *</span>
           <input
-            data-field="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            data-field="firstName"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
             className="w-full rounded-xl bg-white/5 px-4 py-3 text-sm ring-1 ring-border placeholder:text-muted-foreground focus:ring-2 focus:outline-none"
-            placeholder="Your full name"
+            placeholder="Your first name"
             required
           />
-          {errors.name && <p className="mt-1 text-xs text-red-400">{errors.name}</p>}
+          {errors.firstName && <p className="mt-1 text-xs text-red-400">{errors.firstName}</p>}
+        </label>
+        <label className="block text-left">
+          <span className="mb-1 block text-xs font-medium text-foreground">Last Name</span>
+          <input
+            data-field="lastName"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            className="w-full rounded-xl bg-white/5 px-4 py-3 text-sm ring-1 ring-border placeholder:text-muted-foreground focus:ring-2 focus:outline-none"
+            placeholder="Your last name (optional)"
+          />
         </label>
         <label className="block text-left">
           <span className="mb-1 block text-xs font-medium text-foreground">Designation *</span>
@@ -156,16 +159,15 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
           {errors.designation && <p className="mt-1 text-xs text-red-400">{errors.designation}</p>}
         </label>
         <label className="md:col-span-2 block text-left">
-          <span className="mb-1 block text-xs font-medium text-foreground">Tagline *</span>
+          <span className="mb-1 block text-xs font-medium text-foreground">Tagline (optional)</span>
           <input
             data-field="tagline"
             value={tagline}
             onChange={(e) => setTagline(e.target.value)}
             className="w-full rounded-xl bg-white/5 px-4 py-3 text-sm ring-1 ring-border placeholder:text-muted-foreground focus:ring-2 focus:outline-none"
             placeholder="Swamiye Saranam Ayyappa"
-            required
           />
-          {errors.tagline && <p className="mt-1 text-xs text-red-400">{errors.tagline}</p>}
+          {/* Tagline optional; no error */}
         </label>
 
         <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-[auto_1fr] items-center gap-4">
@@ -258,91 +260,7 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
           <p className="mt-1 text-xs text-muted-foreground">Choose Aadhaar or PAN and upload an image or PDF (max 5MB). Only one is required.</p>
         </div>
 
-        {/* About section */}
-        <div className="md:col-span-2 mt-6">
-          <h3 className="text-lg font-semibold text-foreground">About</h3>
-          <p className="text-xs text-muted-foreground">Update biography and highlights.</p>
-        </div>
-
-        <div className="md:col-span-2 grid gap-3">
-          {bioParagraphs.map((p, i) => (
-            <div key={i} className="grid gap-1">
-              <label className="text-xs font-medium text-foreground">Paragraph {i + 1} *</label>
-              <textarea
-                rows={3}
-                value={p}
-                onChange={(e) => {
-                  const next = [...bioParagraphs];
-                  next[i] = e.target.value;
-                  setBioParagraphs(next);
-                }}
-                className="w-full rounded-xl bg-white/5 px-4 py-3 text-sm ring-1 ring-border placeholder:text-muted-foreground focus:ring-2 focus:outline-none"
-                placeholder="Type a short paragraph..."
-              />
-              <div className="flex justify-end">
-                {bioParagraphs.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setBioParagraphs(bioParagraphs.filter((_, idx) => idx !== i))}
-                    className="text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-          <div>
-            <button
-              type="button"
-              onClick={() => setBioParagraphs([...bioParagraphs, ""])}
-              className="rounded-md px-3 py-1.5 text-xs ring-1 ring-border text-foreground hover:bg-white/5"
-            >
-              + Add paragraph
-            </button>
-            {errors.bioParagraphs && <p className="mt-2 text-xs text-red-400">{errors.bioParagraphs}</p>}
-          </div>
-        </div>
-
-        {/* Video URL removed per request */}
-
-        <div className="md:col-span-2 grid gap-3">
-          <label className="text-xs font-medium text-foreground">Highlights *</label>
-          {highlights.map((h, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                data-field={i === 0 ? "highlights" : undefined}
-                value={h}
-                onChange={(e) => {
-                  const next = [...highlights];
-                  next[i] = e.target.value;
-                  setHighlights(next);
-                }}
-                className="flex-1 rounded-xl bg-white/5 px-4 py-3 text-sm ring-1 ring-border placeholder:text-muted-foreground focus:ring-2 focus:outline-none"
-                placeholder="e.g., 12+ years of seva"
-              />
-              <button
-                type="button"
-                onClick={() => setHighlights(highlights.filter((_, idx) => idx !== i))}
-                className="rounded-md px-2 py-1 text-xs ring-1 ring-border text-foreground hover:bg-white/5"
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-          <div>
-            <button
-              type="button"
-              onClick={() => setHighlights([...highlights, ""])}
-              className="rounded-md px-3 py-1.5 text-xs ring-1 ring-border text-foreground hover:bg-white/5"
-            >
-              + Add highlight
-            </button>
-            {errors.highlights && <p className="mt-2 text-xs text-red-400">{errors.highlights}</p>}
-          </div>
-        </div>
-
-        {/* Details section removed per request */}
+        {/* About/Highlights removed per request */}
 
         <div className="md:col-span-2 flex items-center gap-3">
           <button
@@ -357,7 +275,17 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
           <button
             type="button"
             onClick={() => {
-              setName(initialValue?.name || "");
+              const full = String(initialValue?.name || "").trim();
+              if (full) {
+                const parts = full.split(/\s+/);
+                const first = parts.shift() || "";
+                const last = parts.join(" ");
+                setFirstName(first);
+                setLastName(last);
+              } else {
+                setFirstName("");
+                setLastName("");
+              }
               setDesignation(initialValue?.designation || "");
               setTagline(initialValue?.tagline || "");
               setImageUrl(initialValue?.imageUrl || "");

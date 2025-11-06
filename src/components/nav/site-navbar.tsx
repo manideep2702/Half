@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Home,
   CalendarDays,
@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import SabarimalaDropdown from "@/components/ui/sabarimala-dropdown";
+import AdminDataDropdown from "@/components/nav/AdminDataDropdown";
 
 // Avoid pulling Supabase into the root layout's initial graph during SSR.
 // This helps sidestep Turbopack resolution glitches by loading the dropdown on client only.
@@ -26,6 +27,9 @@ export default function SiteNavbar() {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // Ensure a visible Sign In link before hydration/dynamic import
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const items: NavItem[] = [
     { name: "Home", url: "/" },
@@ -82,6 +86,7 @@ export default function SiteNavbar() {
                   )}
                 </Link>
               ))}
+              <AdminDataDropdown />
               {/* Sabarimala dropdown integrated */}
               <div className="flex items-center px-2">
                 <SabarimalaDropdown
@@ -99,6 +104,15 @@ export default function SiteNavbar() {
               </div>
               <div className="flex items-center px-2">
                 <NavUserDropdown />
+                {/* Fallback Sign In link visible before hydration, hidden after mount */}
+                {!mounted && (
+                  <Link
+                    href="/sign-in/"
+                    className="ml-2 inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
+                  >
+                    Sign In
+                  </Link>
+                )}
               </div>
             </nav>
 
@@ -113,7 +127,17 @@ export default function SiteNavbar() {
                   { label: "Pooja Timing", onClick: () => router.push("/sabarimala?tab=pooja") },
                 ]}
               />
+              {/* Admin dropdown (mobile) */}
+              <AdminDataDropdown />
               <NavUserDropdown />
+              {!mounted && (
+                <Link
+                  href="/sign-in/"
+                  className="h-9 rounded-full bg-white/10 px-4 text-xs font-medium text-white hover:bg-white/20"
+                >
+                  Sign In
+                </Link>
+              )}
               <button
                 aria-label="Open menu"
                 className="ml-2 inline-flex items-center justify-center h-9 w-9 rounded-md bg-white/10 hover:bg-white/20"

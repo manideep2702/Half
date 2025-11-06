@@ -21,20 +21,16 @@ export default function AdminPoojaPage() {
     setLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { data: s } = await supabase.auth.getSession();
-      const token = s?.session?.access_token;
-      if (!token) throw new Error("Not authenticated");
-      const res = await fetch("/api/admin/pooja/list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ date: poojaDate, session: poojaSession }),
+      const sess = poojaSession && poojaSession !== "all" ? poojaSession : null;
+      const { data, error } = await supabase.rpc("admin_list_pooja_bookings", {
+        start_date: poojaDate || null,
+        end_date: poojaDate || null,
+        sess,
+        limit_rows: 500,
+        offset_rows: 0,
       });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({} as any));
-        throw new Error(j?.error || `Request failed (${res.status})`);
-      }
-      const j = await res.json();
-      const r: any[] = Array.isArray(j?.rows) ? j.rows : [];
+      if (error) throw error;
+      const r: any[] = Array.isArray(data) ? data : [];
       setRows(r);
       if (r.length === 0) show({ title: "No results", description: "No pooja bookings match the filters.", variant: "info" });
     } catch (e: any) {

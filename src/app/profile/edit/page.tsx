@@ -38,7 +38,7 @@ export default function EditProfilePage() {
       const { data: userRes } = await supabase.auth.getUser();
       const user = userRes?.user;
       if (!user) {
-        router.replace("/sign-in?next=/profile/edit");
+        router.replace("/sign-in/?next=/profile/edit");
         return;
       }
       // Load profile from Supabase if present
@@ -79,7 +79,7 @@ export default function EditProfilePage() {
     const { data: userRes } = await supabase.auth.getUser();
     const user = userRes?.user;
     if (!user) {
-      router.replace("/sign-in?next=/profile/edit");
+      router.replace("/sign-in/?next=/profile/edit");
       return;
     }
     const payloadBase = {

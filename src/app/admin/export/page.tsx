@@ -12,23 +12,42 @@ export default function AdminExportPage() {
   const { show } = useAlert();
   const router = useRouter();
 
+  async function fetchViaRpc(start: string, end: string) {
+    const supabase = getSupabaseBrowserClient();
+    const toIsoTs = (d?: string) => (d ? new Date(d + "T00:00:00").toISOString() : null);
+    const toDate = (d?: string) => (d ? d : null);
+    const [pooja, anna, dons, contacts, vols] = await Promise.all([
+      supabase.rpc("admin_list_pooja_bookings", { start_date: toDate(start), end_date: toDate(end), sess: null, limit_rows: 5000, offset_rows: 0 }),
+      supabase.rpc("admin_list_annadanam_bookings", { start_date: toDate(start), end_date: toDate(end), sess: null, limit_rows: 5000, offset_rows: 0 }),
+      supabase.rpc("admin_list_donations", { start_ts: toIsoTs(start), end_ts: toIsoTs(end), limit_rows: 5000, offset_rows: 0 }),
+      supabase.rpc("admin_list_contact_us", { start_ts: toIsoTs(start), end_ts: toIsoTs(end), limit_rows: 5000, offset_rows: 0 }),
+      supabase.rpc("admin_list_volunteer_bookings", { start_date: toDate(start), end_date: toDate(end), sess: null, limit_rows: 5000, offset_rows: 0 }),
+    ]);
+    const safe = (r: any) => (r?.error ? [] : (Array.isArray(r?.data) ? r.data : []));
+    // Profiles may be restricted by RLS; best-effort
+    let profiles: any[] = [];
+    try {
+      const pr = await supabase.from("Profile-Table").select("*").limit(5000);
+      if (!pr.error) profiles = Array.isArray(pr.data) ? pr.data : [];
+    } catch {}
+    return {
+      users: [], // auth.users not available from client without service key
+      profiles,
+      pooja_bookings: safe(pooja),
+      annadanam_bookings: safe(anna),
+      donations: safe(dons),
+      contact_messages: safe(contacts),
+      volunteer_bookings: safe(vols),
+    } as const;
+  }
+
   const downloadAllData = async (format: "json" | "csv") => {
     try {
       const supabase = getSupabaseBrowserClient();
       const { data: s } = await supabase.auth.getSession();
       const token = s?.session?.access_token;
       if (!token) throw new Error("Not authenticated");
-
-      const res = await fetch("/api/admin/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ start, end }),
-      });
-      if (!res.ok) {
-        const msg = await res.json().catch(() => ({} as any));
-        throw new Error(msg?.error || `Request failed (${res.status})`);
-      }
-      const allData = await res.json();
+      const allData = await fetchViaRpc(start, end);
 
       if (format === "json") {
         const blob = new Blob([JSON.stringify(allData, null, 2)], { type: "application/json" });
@@ -116,5 +135,3 @@ export default function AdminExportPage() {
     </AdminGuard>
   );
 }
-
-

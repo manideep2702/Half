@@ -484,7 +484,7 @@ export default function AnnadanamBooking() {
         show({ title: "Sign in required", description: "Please sign in to book.", variant: "warning" });
         try {
           const next = `${window.location.pathname}${window.location.search}`;
-          window.location.assign(`/sign-in?next=${encodeURIComponent(next)}`);
+          window.location.assign(`/sign-in/?next=${encodeURIComponent(next)}`);
         } catch {}
         return;
       }

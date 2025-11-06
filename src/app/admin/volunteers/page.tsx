@@ -42,20 +42,16 @@ export default function AdminVolunteersPage() {
     setLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { data: s } = await supabase.auth.getSession();
-      const token = s?.session?.access_token;
-      if (!token) throw new Error("Not authenticated");
-      const res = await fetch("/api/admin/volunteer/list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ start_date: volDate, end_date: volEndDate, session: volSession }),
+      const sess = volSession && volSession !== "all" ? volSession : null;
+      const { data, error } = await supabase.rpc("admin_list_volunteer_bookings", {
+        start_date: volDate || null,
+        end_date: volEndDate || null,
+        sess,
+        limit_rows: 500,
+        offset_rows: 0,
       });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({} as any));
-        throw new Error(j?.error || `Request failed (${res.status})`);
-      }
-      const j = await res.json();
-      const r: any[] = Array.isArray(j?.rows) ? j.rows : [];
+      if (error) throw error;
+      const r: any[] = Array.isArray(data) ? data : [];
       setRows(r);
       if (r.length === 0) show({ title: "No results", description: "No volunteer bookings match the filters.", variant: "info" });
     } catch (e: any) {

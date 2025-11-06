@@ -55,7 +55,7 @@ function AuthCallbackContent() {
         }
         console.error("IdP error:", errFromIdP);
         show({ title: "Sign-in failed", description: msg, variant: "error", durationMs: 4500 });
-        router.replace("/sign-in");
+        router.replace("/sign-in/");
         return;
       }
       // If there's no code and we already have a session, decide based on profile
@@ -63,7 +63,7 @@ function AuthCallbackContent() {
       const decideDestWithExistingSession = async (fallbackNext: string) => {
         const { data: userRes } = await supabase.auth.getUser();
         const user = userRes?.user;
-        if (!user) return "/sign-in";
+        if (!user) return "/sign-in/";
         let { data: row } = await supabase
           .from("Profile-Table")
           .select("*")
@@ -87,7 +87,7 @@ function AuthCallbackContent() {
           return;
         }
         // No code – likely direct navigation or redirect mismatch
-        router.replace("/sign-in");
+        router.replace("/sign-in/");
         return;
       }
       // Avoid double-exchange in dev StrictMode: if session already exists, skip exchange
@@ -110,9 +110,9 @@ function AuthCallbackContent() {
           }
         } catch {}
         if (!user) {
-          router.replace("/sign-in");
+          router.replace("/sign-in/");
           return;
-        }
+      }
 
         let needsCompletion = false;
         try {
@@ -198,7 +198,7 @@ function AuthCallbackContent() {
         // Safety timeout: allow more time on first login (slow networks/new accounts)
         setTimeout(() => {
           try { sub.subscription.unsubscribe(); } catch {}
-          router.replace("/sign-in");
+          router.replace("/sign-in/");
         }, 30000);
         return;
       }

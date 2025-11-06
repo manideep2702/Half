@@ -3,7 +3,7 @@
 import RequireAuth from "@/components/auth/require-auth";
 import { useRouter } from "next/navigation";
 import { GradientButton } from "@/components/ui/gradient-button";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,8 +32,47 @@ export default function PoojaBookingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [amount, setAmount] = useState<string>("");
   const [utr, setUtr] = useState("");
+  // blocked map: date ISO -> Set of sessions ("10:30 AM" | "6:30 PM")
+  const [blocked, setBlocked] = useState<Map<string, Set<string>>>(new Map());
+  const prevSessionRef = useRef<string>("");
 
   useEffect(() => { setSelectedDate(START); }, []);
+
+  // Load blocked sessions from admin_config (key: pooja_blocked_dates)
+  useEffect(() => {
+    (async () => {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data } = await supabase.from("admin_config").select("value").eq("key", "pooja_blocked_dates").maybeSingle();
+        const v = data?.value;
+        const map = new Map<string, Set<string>>();
+        const push = (dateIso: string, sess: string) => {
+          const k = String(dateIso);
+          const s = map.get(k) || new Set<string>();
+          s.add(String(sess));
+          map.set(k, s);
+        };
+        let raw: any = [];
+        if (!v) raw = [];
+        else if (Array.isArray(v)) raw = v; // might be array of strings or objects
+        else {
+          try { raw = JSON.parse(String(v)); } catch { raw = []; }
+        }
+        if (Array.isArray(raw)) {
+          for (const el of raw) {
+            if (typeof el === "string") {
+              // legacy: full-day block
+              push(el, "10:30 AM");
+              push(el, "6:30 PM");
+            } else if (el && typeof el === "object" && el.date && el.session) {
+              push(String(el.date), String(el.session));
+            }
+          }
+        }
+        setBlocked(map);
+      } catch {}
+    })();
+  }, []);
 
   const dateIso = useMemo(() => {
     const y = selectedDate.getFullYear();
@@ -41,6 +80,31 @@ export default function PoojaBookingPage() {
     const d = String(selectedDate.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }, [selectedDate]);
+
+  const isDateFullyBlocked = (d: Date) => {
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const s = blocked.get(key);
+    return s?.has("10:30 AM") && s?.has("6:30 PM");
+  };
+
+  const blockedSessionsForSelected = useMemo(() => blocked.get(dateIso) || new Set<string>(), [blocked, dateIso]);
+
+  // Default amount by session: Morning 23000, Evening 18000.
+  useEffect(() => {
+    const prev = prevSessionRef.current;
+    const next = session;
+    const morning = "10:30 AM";
+    const evening = "6:30 PM";
+    const morningAmt = "23000";
+    const eveningAmt = "18000";
+    // If amount is empty or equals the previous default, update to the new default
+    const isPrevDefault = (val: string) => (prev === morning && val === morningAmt) || (prev === evening && val === eveningAmt);
+    if (!amount || isPrevDefault(amount)) {
+      if (next === morning) setAmount(morningAmt);
+      else if (next === evening) setAmount(eveningAmt);
+    }
+    prevSessionRef.current = next;
+  }, [session]);
 
   const book = async () => {
     try {
@@ -138,8 +202,8 @@ export default function PoojaBookingPage() {
                     <div className="max-h-[360px] overflow-y-auto sm:max-h-none">
                       <Calendar
                         selected={selectedDate}
-                        onSelect={(d) => d && d >= START && d <= END && setSelectedDate(d)}
-                        disabled={(d) => d < START || d > END}
+                        onSelect={(d) => { if (!d) return; if (d < START || d > END) return; if (isDateFullyBlocked(d)) return; setSelectedDate(d); }}
+                        disabled={(d) => d < START || d > END || isDateFullyBlocked(d)}
                         className="rounded-lg border-0"
                         fromDate={START}
                         toDate={END}
@@ -185,8 +249,12 @@ export default function PoojaBookingPage() {
                     <Label>Session</Label>
                     <select className="w-full rounded-md border border-border bg-background h-9 px-3 py-1 text-base" value={session} onChange={(e) => setSession(e.target.value)} required aria-label="Select session">
                       <option value="">Select a session</option>
-                      <option value="10:30 AM">Morning — 10:30 AM</option>
-                      <option value="6:30 PM">Evening — 6:30 PM</option>
+                      {!blockedSessionsForSelected.has("10:30 AM") && (
+                        <option value="10:30 AM">Morning — 10:30 AM</option>
+                      )}
+                      {!blockedSessionsForSelected.has("6:30 PM") && (
+                        <option value="6:30 PM">Evening — 6:30 PM</option>
+                      )}
                     </select>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

@@ -10,33 +10,44 @@ export default function Page() {
   const hasSupabaseEnv = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
-  const adminEmailEnv = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
+  const adminEmailListRaw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
+  const adminEmails = adminEmailListRaw.split(/[\s,;]+/).filter(Boolean);
   const handleSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget as HTMLFormElement;
-    const email = (form.elements.namedItem("email") as HTMLInputElement)?.value?.trim();
+    const email = (form.elements.namedItem("email") as HTMLInputElement)?.value?.trim().toLowerCase();
     const password = (form.elements.namedItem("password") as HTMLInputElement)?.value;
     if (!email || !password) {
       show({ title: "Missing details", description: "Please enter email and password.", variant: "warning" });
       return;
     }
-    // 1) If the email matches configured admin email, try admin login
-    if (adminEmailEnv && email.toLowerCase() === adminEmailEnv) {
+    // 1) If email matches configured admin emails, optionally try API login; otherwise fall back to normal sign-in
+    if (adminEmails.includes(email.toLowerCase())) {
       try {
         const adminRes = await fetch("/api/admin/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
-        if (adminRes.ok) {
+        // Treat as success ONLY if the endpoint exists and returns a JSON payload with ok: true
+        const ct = adminRes.headers.get("content-type") || "";
+        let adminJson: any = null;
+        if (ct.includes("application/json")) {
+          adminJson = await adminRes.json().catch(() => null);
+        }
+        if (adminJson?.ok === true) {
           window.location.assign("/admin");
           return;
         }
-        // If admin login fails with matching email, show error and stop here
-        const msg = await adminRes.json().catch(() => ({} as any));
-        show({ title: "Admin sign-in failed", description: msg?.error || "Invalid admin credentials", variant: "error" });
-        return;
-      } catch {}
+        // If the route is missing (static export) or any non-OK, continue with normal sign-in instead of blocking
+        if (adminRes.status && adminRes.status !== 404) {
+          const msg = adminJson || (ct.includes("application/json") ? {} : null) || ({} as any);
+          // Soft notice but proceed
+          show({ title: "Admin API unavailable", description: msg?.error || "Continuing with normal sign-in…", variant: "info" });
+        }
+      } catch {
+        // Ignore and continue with normal sign-in
+      }
     }
     // 2) Otherwise continue with normal user sign-in.
     // Check if this email belongs to a Google-only account (if server key configured)

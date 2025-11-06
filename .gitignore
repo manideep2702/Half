@@ -16,6 +16,7 @@
 # next.js
 /.next/
 /out/
+out.zip
 
 # production
 /build
@@ -23,6 +24,10 @@
 # misc
 .DS_Store
 *.pem
+
+# virtualenvs
+venv/
+api/venv/
 
 # debug
 npm-debug.log*

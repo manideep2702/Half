@@ -1,8 +1,12 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+// Toggle static export via env: STATIC_EXPORT=1 npm run build
+const isStaticExport = process.env.STATIC_EXPORT === "1" || process.env.STATIC_EXPORT === "true";
+
 const nextConfig: NextConfig = {
-  output: "export",
+  // In static mode, Next 15 writes to `out/` during `next build`.
+  ...(isStaticExport ? { output: "export" as const } : {}),
   trailingSlash: true,
   // Relax build-time checks on CI providers (Netlify/Vercel)
   eslint: { ignoreDuringBuilds: true },
