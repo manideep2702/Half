@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useAlert } from "@/components/ui/alert-provider";
 
-export default function ProfileEditorForm({ initialValue, onSave, onCancel, onImageFileUpload, onAadhaarUpload, onPanUpload }) {
+export default function ProfileEditorForm({ initialValue, onSave, onCancel, onImageFileUpload, onAadhaarUpload, onPanUpload, showIdentityUpload = true }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [designation, setDesignation] = useState(initialValue?.designation || "");
@@ -200,6 +200,7 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
         </div>
 
         {/* Identity document selection (upload Aadhaar OR PAN) */}
+        {showIdentityUpload && (
         <div className="md:col-span-2 mt-4">
           <span className="mb-1 block text-xs font-medium text-foreground">Identity Document *</span>
           <div className="mt-2 flex items-center gap-6 text-sm">
@@ -259,6 +260,7 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
           {errors.document && <p className="mt-1 text-xs text-red-400">{errors.document}</p>}
           <p className="mt-1 text-xs text-muted-foreground">Choose Aadhaar or PAN and upload an image or PDF (max 5MB). Only one is required.</p>
         </div>
+        )}
 
         {/* About/Highlights removed per request */}
 

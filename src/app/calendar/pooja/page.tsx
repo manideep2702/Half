@@ -36,7 +36,18 @@ export default function PoojaBookingPage() {
   const [blocked, setBlocked] = useState<Map<string, Set<string>>>(new Map());
   const prevSessionRef = useRef<string>("");
 
-  useEffect(() => { setSelectedDate(START); }, []);
+  useEffect(() => {
+    // Initialize to today within window; after 9:00 PM, move to next day
+    const now = new Date();
+    const hour = now.getHours();
+    let init = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (hour >= 21) {
+      init = new Date(init.getTime() + 24 * 60 * 60 * 1000); // next day
+    }
+    if (init < START) init = START;
+    if (init > END) init = END;
+    setSelectedDate(init);
+  }, []);
 
   // Load blocked sessions from admin_config (key: pooja_blocked_dates)
   useEffect(() => {
@@ -88,6 +99,21 @@ export default function PoojaBookingPage() {
   };
 
   const blockedSessionsForSelected = useMemo(() => blocked.get(dateIso) || new Set<string>(), [blocked, dateIso]);
+
+  // Apply time-based blocking for the selected date (hide past sessions today)
+  const blockedForRender = useMemo(() => {
+    const s = new Set<string>(blockedSessionsForSelected);
+    const today = new Date();
+    const sameDay = selectedDate.getFullYear() === today.getFullYear() && selectedDate.getMonth() === today.getMonth() && selectedDate.getDate() === today.getDate();
+    if (sameDay) {
+      const h = today.getHours();
+      // After 11:00 AM, hide the 10:30 AM session
+      if (h >= 11) s.add("10:30 AM");
+      // After 9:00 PM, hide both (effectively forces choosing a later date)
+      if (h >= 21) { s.add("10:30 AM"); s.add("6:30 PM"); }
+    }
+    return s;
+  }, [blockedSessionsForSelected, selectedDate]);
 
   // Default amount by session: Morning 23000, Evening 18000.
   useEffect(() => {
@@ -204,6 +230,13 @@ export default function PoojaBookingPage() {
                         selected={selectedDate}
                         onSelect={(d) => { if (!d) return; if (d < START || d > END) return; if (isDateFullyBlocked(d)) return; setSelectedDate(d); }}
                         disabled={(d) => d < START || d > END || isDateFullyBlocked(d)}
+                        completed={(d) => {
+                          const today = new Date();
+                          const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                          const d0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                          const isNov5 = d.getFullYear() === 2025 && d.getMonth() === 10 && d.getDate() === 5;
+                          return isNov5 || d0 < t0; // also mark Nov 5, 2025 as completed
+                        }}
                         className="rounded-lg border-0"
                         fromDate={START}
                         toDate={END}
@@ -249,10 +282,10 @@ export default function PoojaBookingPage() {
                     <Label>Session</Label>
                     <select className="w-full rounded-md border border-border bg-background h-9 px-3 py-1 text-base" value={session} onChange={(e) => setSession(e.target.value)} required aria-label="Select session">
                       <option value="">Select a session</option>
-                      {!blockedSessionsForSelected.has("10:30 AM") && (
+                      {!blockedForRender.has("10:30 AM") && (
                         <option value="10:30 AM">Morning — 10:30 AM</option>
                       )}
-                      {!blockedSessionsForSelected.has("6:30 PM") && (
+                      {!blockedForRender.has("6:30 PM") && (
                         <option value="6:30 PM">Evening — 6:30 PM</option>
                       )}
                     </select>

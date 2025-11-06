@@ -125,18 +125,8 @@ export default function Page() {
           row = second.data ?? null;
         }
         const displayName = (row?.name || row?.full_name || fullName || user.email || email || "").toString();
-        // New profile or missing identity docs → send to profile completion
-        const needsCompletion = !row;
-        const missingDocs = !(row?.aadhaar_url || row?.aadhar_url || row?.pan_url);
         show({ title: "Welcome", description: `${displayName}`, variant: "success" });
-        if (needsCompletion || missingDocs) {
-          router.replace("/profile/edit/?require_docs=1");
-        } else if (nextParam) {
-          // Preserve provided next param as-is (may already include slash)
-          router.replace(nextParam);
-        } else {
-          router.replace("/");
-        }
+        router.replace("/profile/edit/");
         return;
       }
     } catch {}

@@ -20,7 +20,6 @@ type ProfileData = {
 
 export default function EditProfilePage() {
   const router = useRouter();
-  const [requireDocs, setRequireDocs] = useState(false);
   const { show } = useAlert();
   const [value, setValue] = useState<ProfileData>({
     name: "",
@@ -32,6 +31,7 @@ export default function EditProfilePage() {
     aadhaarUrl: "",
     panUrl: "",
   });
+  const [showIdentityUpload, setShowIdentityUpload] = useState(false);
 
   useEffect(() => {
     const run = async () => {
@@ -70,19 +70,22 @@ export default function EditProfilePage() {
           aadhaarUrl: (data.aadhaar_url || data.aadhar_url || prev.aadhaarUrl || "") as string,
           panUrl: (data.pan_url || prev.panUrl || "") as string,
         }));
+        try {
+          const hasDoc = Boolean((data as any).aadhaar_url || (data as any).aadhar_url || (data as any).pan_url);
+          setShowIdentityUpload(!hasDoc);
+        } catch {
+          setShowIdentityUpload(true);
+        }
+      }
+      if (!data) {
+        // No profile row yet → show identity upload by default for Google sign-ins
+        setShowIdentityUpload(true);
       }
     };
     run();
   }, [router]);
 
-  useEffect(() => {
-    try {
-      const url = new URL(typeof window !== 'undefined' ? window.location.href : 'http://localhost');
-      setRequireDocs(url.searchParams.get('require_docs') === '1');
-    } catch {
-      setRequireDocs(false);
-    }
-  }, []);
+  
 
   const handleSave = async (next: ProfileData) => {
     const supabase = getSupabaseBrowserClient();
@@ -204,18 +207,6 @@ export default function EditProfilePage() {
     <RequireAuth>
       <main className="min-h-screen bg-background text-foreground">
         <div className="mx-auto max-w-4xl px-4 pt-28 pb-12">
-          {/* Banner prompting for Aadhaar/PAN when required */}
-          {(() => {
-            const missingDocs = !(value?.aadhaarUrl || value?.panUrl);
-            if (requireDocs || missingDocs) {
-              return (
-                <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-600">
-                  Please upload either Aadhaar or PAN to complete your profile.
-                </div>
-              );
-            }
-            return null;
-          })()}
           <div className="mb-4">
             <button
               type="button"
@@ -232,6 +223,7 @@ export default function EditProfilePage() {
             onImageFileUpload={handleUpload}
             onAadhaarUpload={handleAadhaarUpload}
             onPanUpload={handlePanUpload}
+            showIdentityUpload={showIdentityUpload}
           />
         </div>
       </main>

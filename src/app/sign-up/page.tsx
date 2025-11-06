@@ -97,11 +97,9 @@ export default function SignUpPage() {
     setSendingOtp(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const siteUrl = ((typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || "")) as string).replace(/\/$/, "");
       const { error } = await supabase.auth.signInWithOtp({
         email: trimmed,
         options: {
-          emailRedirectTo: `${siteUrl}/auth/callback`,
           shouldCreateUser: true,
         },
       });

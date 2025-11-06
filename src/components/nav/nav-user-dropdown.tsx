@@ -251,10 +251,10 @@ export default function NavUserDropdown() {
               </div>
               {loggedIn ? (
                 <button
-                  onClick={() => router.push("/profile")}
+                  onClick={() => router.push("/profile/edit/")}
                   className="mt-3 inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/10"
                 >
-                  Manage your account
+                  Edit your profile
                 </button>
               ) : (
                 <button
