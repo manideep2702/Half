@@ -97,8 +97,8 @@ function AnnadanamCard() {
   const nextDate = getNextAnnadanamDate();
   const nextDateLabel = nextDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const rows = [
-    { session: "Morning", time: "12:30 – 2:30 pm" },
-    { session: "Evening", time: "8:30 – 10:00 pm" },
+    { session: "Morning", time: "1:00 – 3:00 pm" },
+    { session: "Evening", time: "8:00 – 10:00 pm" },
   ];
   return (
     <div className="w-full h-full bg-white p-6">

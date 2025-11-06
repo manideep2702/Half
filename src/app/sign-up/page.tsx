@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { CalendarDays, BookOpenText, HeartHandshake } from "lucide-react";
+import { CalendarDays, BookOpenText, HeartHandshake, CheckCircle } from "lucide-react";
 
 // Simple Google mark used on auth buttons
 const GoogleIcon = () => (
@@ -26,10 +26,160 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
-  // OTP flow removed: simple password sign-up
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [resendSeconds, setResendSeconds] = useState(0);
+  const [cooldownTimer, setCooldownTimer] = useState<any>(null);
+  const [docChoice, setDocChoice] = useState<'aadhaar' | 'pan'>("aadhaar");
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docPreview, setDocPreview] = useState<string>("");
+  const [docUploading, setDocUploading] = useState(false);
+  const [docUrl, setDocUrl] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  // resend state removed with OTP flow
+
+  useEffect(() => {
+    // Reset verification state when email changes
+    setEmailVerified(false);
+    setOtpSent(false);
+    setOtpCode("");
+    setResendSeconds(0);
+    if (cooldownTimer) {
+      try { clearInterval(cooldownTimer); } catch {}
+      setCooldownTimer(null);
+    }
+  }, [email]);
+
+  function startCooldown(seconds = 60) {
+    setResendSeconds(seconds);
+    try { if (cooldownTimer) clearInterval(cooldownTimer); } catch {}
+    const t = setInterval(() => {
+      setResendSeconds((s) => {
+        if (s <= 1) {
+          try { clearInterval(t); } catch {}
+          setCooldownTimer(null);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    setCooldownTimer(t);
+  }
+
+  async function sendEmailOtp() {
+    setError(null);
+    setInfo(null);
+    const trimmed = String(email || "").trim();
+    const isValid = /.+@.+\..+/.test(trimmed);
+    if (!isValid) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    if (resendSeconds > 0) return;
+    // Pre-check if email already exists to show a friendly message
+    try {
+      const r = await fetch(`/api/auth/check-email?email=${encodeURIComponent(trimmed)}`);
+      if (r.ok) {
+        const j = await r.json();
+        if (j?.exists === true) {
+          const providers: string[] = Array.isArray(j.providers) ? j.providers : [];
+          const hasGoogle = providers.includes("google");
+          setError(hasGoogle ? "This email is already registered via Google. Please use 'Continue with Google' on the sign-in page." : "This email is already registered. Please sign in or reset your password.");
+          return;
+        }
+      }
+    } catch {}
+    setSendingOtp(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const siteUrl = ((typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || "")) as string).replace(/\/$/, "");
+      const { error } = await supabase.auth.signInWithOtp({
+        email: trimmed,
+        options: {
+          emailRedirectTo: `${siteUrl}/auth/callback`,
+          shouldCreateUser: true,
+        },
+      });
+      if (error) {
+        const msg = error.message || "Failed to send verification code.";
+        setError(msg);
+        if (/rate\s*limit/i.test(msg)) {
+          startCooldown(60);
+        }
+        return;
+      }
+      setOtpSent(true);
+      setInfo("Verification code sent to your email.");
+      startCooldown(60);
+    } catch (e: any) {
+      setError(e?.message || "Unexpected error");
+    } finally {
+      setSendingOtp(false);
+    }
+  }
+
+  async function verifyEmailCode() {
+    setError(null);
+    setInfo(null);
+    const trimmed = String(email || "").trim();
+    const code = String(otpCode || "").trim();
+    if (!code) {
+      setError("Enter the code you received.");
+      return;
+    }
+    setVerifyingOtp(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: trimmed,
+        token: code,
+        type: 'email',
+      });
+      if (error) {
+        setError(error.message || "Invalid code. Try again.");
+        return;
+      }
+      if (!data?.session) {
+        setError("Verification succeeded but no session was created. Please resend the code.");
+        return;
+      }
+      setEmailVerified(true);
+      setInfo("Email verified successfully.");
+    } catch (e: any) {
+      setError(e?.message || "Unexpected error");
+    } finally {
+      setVerifyingOtp(false);
+    }
+  }
+
+  function onDocFileChange(file: File | null) {
+    setDocFile(file);
+    try {
+      if (docPreview) URL.revokeObjectURL(docPreview);
+    } catch {}
+    setDocPreview(file ? URL.createObjectURL(file) : "");
+  }
+
+  async function uploadIdentityDocument(kind: 'aadhaar' | 'pan', file: File): Promise<string> {
+    const supabase = getSupabaseBrowserClient();
+    const { data: sessionRes } = await supabase.auth.getSession();
+    if (!sessionRes?.session) throw new Error("Session expired. Please verify your email again.");
+    const { data: userRes } = await supabase.auth.getUser();
+    const user = userRes?.user;
+    if (!user) throw new Error("Not signed in");
+    const emailAddr = (user.email || email || "user").toLowerCase();
+    const safe = emailAddr.replace(/[^a-z0-9._-]/gi, "_");
+    const ext = (file.name.split(".").pop() || (file.type?.includes("png") ? "png" : file.type?.includes("jpeg") ? "jpg" : file.type?.includes("pdf") ? "pdf" : "jpg"));
+    const path = `${kind}/${safe}.${ext}`;
+    const bucket = "PAN-Aadhar";
+    const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: true, cacheControl: "3600" });
+    if (upErr) throw upErr;
+    const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
+    return pub.publicUrl;
+  }
 
 
   async function onSubmit(e: React.FormEvent) {
@@ -44,29 +194,65 @@ export default function SignUpPage() {
       setError("Passwords do not match.");
       return;
     }
+    if (!emailVerified) {
+      setError("Please verify your email to continue.");
+      return;
+    }
+    if (!docFile && !docUrl) {
+      setError("Please upload Aadhaar or PAN to continue.");
+      return;
+    }
+    if (!phone) {
+      setError("Phone number is required.");
+      return;
+    }
     setLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const siteUrl = ((typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || "")) as string).replace(/\/$/, "");
-      const { data, error } = await supabase.auth.signUp({
-        email,
+      const { data: sessionRes } = await supabase.auth.getSession();
+      if (!sessionRes?.session) {
+        setError("Session expired. Please verify your email again.");
+        return;
+      }
+      const { error: updErr } = await supabase.auth.updateUser({
         password,
-        options: {
-          emailRedirectTo: `${siteUrl}/auth/callback`,
-          data: { full_name: fullName, name: fullName, phone, city },
-        },
+        data: { full_name: fullName, name: fullName, phone, city },
       });
-      if (error) {
-        setError(error.message || "Failed to create account.");
+      if (updErr) {
+        setError(updErr.message || "Failed to set password.");
         return;
       }
-      // If email confirmation is disabled, session exists → go to profile
-      if (data?.session?.user) {
-        window.location.assign("/profile/edit");
-        return;
+      // Upload identity document
+      let storedUrl = docUrl;
+      if (docFile && emailVerified) {
+        setDocUploading(true);
+        try {
+          storedUrl = await uploadIdentityDocument(docChoice, docFile);
+          setDocUrl(storedUrl);
+        } finally {
+          setDocUploading(false);
+        }
       }
-      // Otherwise, send them to sign-in after verification link
-      setInfo("Account created. Please check your email to verify and then sign in.");
+      // Upsert to Profile-Table with document URL so future sign-ins won't be prompted
+      try {
+        const { data: userRes } = await supabase.auth.getUser();
+        const user = userRes?.user;
+        if (user && storedUrl) {
+          const payloadBase: Record<string, any> = {
+            name: fullName || "",
+            full_name: fullName || "",
+            phone: phone || "",
+            city: city || "",
+          };
+          if (docChoice === 'aadhaar') payloadBase.aadhaar_url = storedUrl;
+          else payloadBase.pan_url = storedUrl;
+          const attempt = async (key: "user_id" | "id", payload: Record<string, any>) =>
+            supabase.from("Profile-Table").upsert({ [key]: user.id, ...payload }, { onConflict: key }).select("*");
+          let ok = await attempt("user_id", payloadBase);
+          if (ok.error) ok = await attempt("id", payloadBase);
+        }
+      } catch {}
+      window.location.assign("/profile/edit");
     } catch (e: any) {
       setError(e?.message || "Unexpected error");
     } finally {
@@ -116,7 +302,36 @@ export default function SignUpPage() {
                 <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your full name" />
               </Field>
               <Field label="Email" required>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+                <div className="flex gap-2 items-center">
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+                  {emailVerified ? (
+                    <span className="inline-flex items-center gap-1 rounded-md border border-emerald-600/30 bg-emerald-600/10 px-2.5 py-1 text-[12px] text-emerald-600">
+                      <CheckCircle className="h-4 w-4" /> Verified
+                    </span>
+                  ) : (
+                  <button
+                      type="button"
+                      onClick={sendEmailOtp}
+                    disabled={sendingOtp || !email || resendSeconds > 0}
+                      className="inline-flex items-center rounded-md border border-border px-3 py-2 text-xs hover:bg-secondary disabled:opacity-60"
+                    >
+                      {sendingOtp ? "Sending…" : (otpSent ? (resendSeconds > 0 ? `Resend ${resendSeconds}s` : "Resend") : "Verify")}
+                    </button>
+                  )}
+                </div>
+                {otpSent && !emailVerified && (
+                  <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+                    <Input inputMode="numeric" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="Enter code" />
+                    <button
+                      type="button"
+                      onClick={verifyEmailCode}
+                      disabled={verifyingOtp || !otpCode}
+                      className="inline-flex items-center rounded-md border border-border px-3 py-2 text-xs hover:bg-secondary disabled:opacity-60"
+                    >
+                      {verifyingOtp ? "Verifying…" : "Confirm"}
+                    </button>
+                  </div>
+                )}
               </Field>
               <Field label="Password" required>
                 <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password" />
@@ -124,12 +339,42 @@ export default function SignUpPage() {
               <Field label="Confirm Password" required>
                 <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Re-enter password" />
               </Field>
-              <Field label="Phone Number (optional)">
-                <Input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91" />
+              <Field label="Phone Number" required>
+                <Input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91" required />
               </Field>
               <Field label="City">
                 <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Your city" />
               </Field>
+              <div className="md:col-span-2">
+                <span className="mb-1 block text-xs font-medium text-muted-foreground">Identity Document *</span>
+                <div className="mt-2 flex items-center gap-6 text-sm">
+                  <label className="inline-flex items-center gap-2">
+                    <input type="radio" name="docChoice" value="aadhaar" checked={docChoice === 'aadhaar'} onChange={() => setDocChoice('aadhaar')} />
+                    Aadhaar
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input type="radio" name="docChoice" value="pan" checked={docChoice === 'pan'} onChange={() => setDocChoice('pan')} />
+                    PAN
+                  </label>
+                </div>
+                <div className="mt-3 flex items-center gap-4">
+                  {docPreview ? (
+                    docPreview.endsWith('.pdf') ? (
+                      <a href={docPreview} target="_blank" rel="noopener noreferrer" className="text-xs underline">View file</a>
+                    ) : (
+                      <img src={docPreview} alt="Document" className="h-16 w-16 rounded object-cover ring-1 ring-border" />
+                    )
+                  ) : null}
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => onDocFileChange(e.target.files?.[0] || null)}
+                    className="w-full cursor-pointer rounded-xl bg-white/5 px-4 py-2.5 text-sm ring-1 ring-border file:mr-3 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-sm hover:file:bg-white/20 focus:ring-2 focus:outline-none"
+                    aria-label="Upload identity document"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">Upload an image or PDF (max ~5MB). Either Aadhaar or PAN is required.</p>
+              </div>
             </div>
 
             {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
@@ -138,7 +383,7 @@ export default function SignUpPage() {
             <p className="mt-4 text-xs text-muted-foreground">Your details are safe with us — used only for Samithi communication.</p>
 
             <div className="mt-6 flex justify-center">
-              <GradientButton className="min-w-[220px] text-[17px]" disabled={loading}>{loading ? "Creating…" : "Create Account"}</GradientButton>
+              <GradientButton className="min-w-[220px] text-[17px]" disabled={loading || !emailVerified || (!docFile && !docUrl) || docUploading}>{loading ? "Creating…" : (docUploading ? "Uploading…" : "Create Account")}</GradientButton>
             </div>
 
             <div className="mt-6 relative flex items-center justify-center">

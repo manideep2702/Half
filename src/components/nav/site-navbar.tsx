@@ -60,7 +60,7 @@ export default function SiteNavbar() {
           <div className="flex items-stretch justify-between">
             {/* Brand */}
             <div className="flex items-center gap-3 py-2">
-              <img src="/logo.jpeg" alt="Sree Sabari Sastha Seva Samithi" className="h-12 w-12 object-contain" />
+              <img src="/logo.jpeg" alt="Sree Sabari Sastha Seva Samithi" className="h-14 w-14 object-contain" />
               <div className="leading-tight hidden sm:block">
                 <div className="text-lg font-semibold tracking-wide">Sree Sabari Sastha</div>
                 <div className="text-lg font-semibold tracking-wide">Seva Samithi</div>

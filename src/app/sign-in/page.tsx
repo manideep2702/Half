@@ -123,11 +123,12 @@ export default function Page() {
           row = second.data ?? null;
         }
         const displayName = (row?.name || row?.full_name || fullName || user.email || email || "").toString();
-        // New vs existing: if a profile row exists, treat as existing
+        // New profile or missing identity docs → send to profile completion
         const needsCompletion = !row;
+        const missingDocs = !(row?.aadhaar_url || row?.aadhar_url || row?.pan_url);
         show({ title: "Welcome", description: `${displayName}`, variant: "success" });
-        if (needsCompletion) {
-          window.location.assign("/profile/edit");
+        if (needsCompletion || missingDocs) {
+          window.location.assign("/profile/edit?require_docs=1");
         } else if (nextParam) {
           window.location.assign(nextParam);
         } else {
@@ -162,19 +163,7 @@ export default function Page() {
   };
 
   const handleResetPassword = async () => {
-    if (!hasSupabaseEnv) {
-      show({ title: "Auth not configured", description: "Password reset is unavailable.", variant: "warning" });
-      return;
-    }
-    const { getSupabaseBrowserClient } = await import("@/lib/supabase/client");
-    const supabase = getSupabaseBrowserClient();
-    const inputEl = document.querySelector('input[name="email"]') as HTMLInputElement | null;
-    const email = inputEl?.value?.trim() || window.prompt("Enter your email for password reset") || "";
-    if (!email) return;
-      const siteUrl = ((typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || "")) as string).replace(/\/$/, "");
-      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${siteUrl}/auth/update-password` });
-    if (error) show({ title: "Reset failed", description: error.message, variant: "error" });
-    else show({ title: "Reset link sent", description: "Check your inbox.", variant: "success" });
+    window.location.assign("/auth/forgot-password");
   };
 
   const handleCreateAccount = () => {

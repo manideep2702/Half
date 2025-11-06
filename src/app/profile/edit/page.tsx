@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAlert } from "@/components/ui/alert-provider";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import ProfileEditorForm from "@/components/profile/ProfileEditorForm";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import RequireAuth from "@/components/auth/require-auth";
@@ -20,6 +20,7 @@ type ProfileData = {
 
 export default function EditProfilePage() {
   const router = useRouter();
+  const search = useSearchParams();
   const { show } = useAlert();
   const [value, setValue] = useState<ProfileData>({
     name: "",
@@ -194,6 +195,19 @@ export default function EditProfilePage() {
     <RequireAuth>
       <main className="min-h-screen bg-background text-foreground">
         <div className="mx-auto max-w-4xl px-4 pt-28 pb-12">
+          {/* Banner prompting for Aadhaar/PAN when required */}
+          {(() => {
+            const flag = search?.get("require_docs") === "1";
+            const missingDocs = !(value?.aadhaarUrl || value?.panUrl);
+            if (flag || missingDocs) {
+              return (
+                <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-600">
+                  Please upload either Aadhaar or PAN to complete your profile.
+                </div>
+              );
+            }
+            return null;
+          })()}
           <div className="mb-4">
             <button
               type="button"
