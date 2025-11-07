@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useOnClickOutside } from "usehooks-ts";
 import { User, LogIn, LogOut, ChevronDown, CalendarDays, Camera, X } from "lucide-react";
 import { useAlert } from "@/components/ui/alert-provider";
@@ -187,14 +188,13 @@ export default function NavUserDropdown() {
 
   return (
     <div ref={anchorRef} className="relative">
+      {loggedIn ? (
       <button
         type="button"
         onClick={onTriggerClick}
-        aria-expanded={loggedIn ? open : undefined}
+          aria-expanded={open}
         className="inline-flex items-center gap-2 rounded-full bg-white/15 px-2.5 py-1.5 text-xs font-medium text-white ring-1 ring-white/20 hover:bg-white/25"
       >
-        {loggedIn ? (
-          <>
             {avatarUrl ? (
               <img
                 src={avatarUrl}
@@ -208,14 +208,16 @@ export default function NavUserDropdown() {
               </span>
             )}
             <ChevronDown size={14} className="opacity-80" />
-          </>
+        </button>
         ) : (
-          <>
+        <Link
+          href="/sign-in/"
+          className="inline-flex items-center gap-2 rounded-full bg-white/15 px-2.5 py-1.5 text-xs font-medium text-white ring-1 ring-white/20 hover:bg-white/25"
+        >
             <LogIn size={16} />
             <span className="hidden sm:inline">Login</span>
-          </>
+        </Link>
         )}
-      </button>
 
       {open && (
         <div className="absolute right-0 top-[110%] z-50">

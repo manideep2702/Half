@@ -17,11 +17,12 @@ export default function AdminDataDropdown() {
         const { data } = await supabase.auth.getUser();
         const user = data?.user as any;
         const email = (user?.email || "").toLowerCase();
-        const identities: any[] = Array.isArray(user?.identities) ? user.identities : [];
-        const hasEmailProvider = identities.some((i) => i?.provider === "email");
         const raw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
-        const allowed = raw.split(/[\s,;]+/).filter(Boolean);
-        if (!cancelled) setShow(!!email && hasEmailProvider && (allowed.length === 0 || allowed.includes(email)));
+        const fromEnv = raw.split(/[\s,;]+/).filter(Boolean);
+        const fallback = ["ssabarisasthass@gmail.com"]; // default admin email
+        const allowed = Array.from(new Set([...fromEnv, ...fallback]));
+        // Show admin if the logged-in email is in the allowed list
+        if (!cancelled) setShow(!!email && allowed.includes(email));
       } catch {
         if (!cancelled) setShow(false);
       }

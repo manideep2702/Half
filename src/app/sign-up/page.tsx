@@ -71,6 +71,34 @@ export default function SignUpPage() {
     setCooldownTimer(t);
   }
 
+  async function waitForSession(timeoutMs = 6000) {
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data: initial } = await supabase.auth.getSession();
+      if (initial?.session) return initial.session;
+      return await new Promise<import("@supabase/supabase-js").Session | null>((resolve) => {
+        let done = false;
+        const timer = setTimeout(() => {
+          if (done) return;
+          done = true;
+          try { sub.subscription.unsubscribe(); } catch {}
+          resolve(null);
+        }, timeoutMs);
+        const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+          if (done) return;
+          if (session) {
+            done = true;
+            clearTimeout(timer);
+            try { sub.subscription.unsubscribe(); } catch {}
+            resolve(session);
+          }
+        });
+      });
+    } catch {
+      return null;
+    }
+  }
+
   async function sendEmailOtp() {
     setError(null);
     setInfo(null);
@@ -142,8 +170,10 @@ export default function SignUpPage() {
         setError(error.message || "Invalid code. Try again.");
         return;
       }
-      if (!data?.session) {
-        setError("Verification succeeded but no session was created. Please resend the code.");
+      // Session can arrive slightly after verifyOtp completes. Wait briefly for it.
+      const sess = data?.session ?? (await waitForSession(6000));
+      if (!sess) {
+        setError("Verified, but session not ready yet. Please try Confirm again or resend the code.");
         return;
       }
       setEmailVerified(true);
@@ -181,7 +211,6 @@ export default function SignUpPage() {
     return pub.publicUrl;
   }
 
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -198,12 +227,12 @@ export default function SignUpPage() {
       setError("Please verify your email to continue.");
       return;
     }
-    if (!docFile && !docUrl) {
-      setError("Please upload Aadhaar or PAN to continue.");
-      return;
-    }
     if (!phone) {
       setError("Phone number is required.");
+      return;
+    }
+    if (!docFile && !docUrl) {
+      setError("Aadhaar or PAN is required.");
       return;
     }
     setLoading(true);
@@ -219,11 +248,12 @@ export default function SignUpPage() {
               setError(vErr.message || "Session expired. Please verify your email again.");
               return;
             }
-            if (!vData?.session) {
-              setError("Session expired. Please verify your email again.");
+            const sess = vData?.session ?? (await waitForSession(6000));
+            if (!sess) {
+              setError("Session not ready yet. Please press Confirm again or resend the code.");
               return;
             }
-            sessionRes = { session: vData.session } as any;
+            sessionRes = { session: sess } as any;
           } else {
             setError("Session expired. Please verify your email again.");
             return;
@@ -241,7 +271,7 @@ export default function SignUpPage() {
         setError(updErr.message || "Failed to set password.");
         return;
       }
-      // Upload identity document
+      // Optional: upload identity document if provided
       let storedUrl = docUrl;
       if (docFile && emailVerified) {
         setDocUploading(true);
@@ -252,26 +282,29 @@ export default function SignUpPage() {
           setDocUploading(false);
         }
       }
-      // Upsert to Profile-Table with document URL so future sign-ins won't be prompted
+      // Upsert to Profile-Table with optional document URL
       try {
         const { data: userRes } = await supabase.auth.getUser();
         const user = userRes?.user;
-        if (user && storedUrl) {
+        if (user) {
           const payloadBase: Record<string, any> = {
             name: fullName || "",
             full_name: fullName || "",
             phone: phone || "",
             city: city || "",
           };
-          if (docChoice === 'aadhaar') payloadBase.aadhaar_url = storedUrl;
-          else payloadBase.pan_url = storedUrl;
+          if (storedUrl) {
+            if (docChoice === 'aadhaar') payloadBase.aadhaar_url = storedUrl;
+            else payloadBase.pan_url = storedUrl;
+          }
           const attempt = async (key: "user_id" | "id", payload: Record<string, any>) =>
             supabase.from("Profile-Table").upsert({ [key]: user.id, ...payload }, { onConflict: key }).select("*");
           let ok = await attempt("user_id", payloadBase);
           if (ok.error) ok = await attempt("id", payloadBase);
         }
       } catch {}
-      try { router.replace("/profile/"); } catch { window.location.assign("/profile/"); }
+      // Send user to home page after successful signup
+      try { router.replace("/"); } catch { window.location.assign("/"); }
     } catch (e: any) {
       setError(e?.message || "Unexpected error");
     } finally {
@@ -283,7 +316,7 @@ export default function SignUpPage() {
   async function onGoogleSignUp() {
     const { getSupabaseBrowserClient } = await import("@/lib/supabase/client");
     const supabase = getSupabaseBrowserClient();
-    try { sessionStorage.setItem("ayya.auth.next", "/profile/edit"); } catch {}
+    try { sessionStorage.setItem("ayya.auth.next", "/"); } catch {}
     const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, "");
     const redirectTo = `${siteUrl}/auth/callback/`;
     const { error } = await supabase.auth.signInWithOAuth({
@@ -402,7 +435,7 @@ export default function SignUpPage() {
             <p className="mt-4 text-xs text-muted-foreground">Your details are safe with us — used only for Samithi communication.</p>
 
             <div className="mt-6 flex justify-center">
-              <GradientButton className="min-w-[220px] text-[17px]" disabled={loading || !emailVerified || (!docFile && !docUrl) || docUploading}>{loading ? "Creating…" : (docUploading ? "Uploading…" : "Create Account")}</GradientButton>
+              <GradientButton className="min-w-[220px] text-[17px]" disabled={loading || !emailVerified || docUploading || (!docFile && !docUrl)}>{loading ? "Creating…" : (docUploading ? "Uploading…" : "Create Account")}</GradientButton>
             </div>
 
             <div className="mt-6 relative flex items-center justify-center">

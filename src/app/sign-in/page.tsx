@@ -13,7 +13,9 @@ export default function Page() {
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
   const adminEmailListRaw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase();
-  const adminEmails = adminEmailListRaw.split(/[\s,;]+/).filter(Boolean);
+  const fromEnv = adminEmailListRaw.split(/[\s,;]+/).filter(Boolean);
+  const fallbackAdmins = ["ssabarisasthass@gmail.com"]; // default admin email
+  const adminEmails = Array.from(new Set([...fromEnv, ...fallbackAdmins]));
   const handleSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget as HTMLFormElement;
@@ -42,9 +44,10 @@ export default function Page() {
           return;
         }
         // If the route is missing (static export) or any non-OK, continue with normal sign-in instead of blocking
-        if (adminRes.status && adminRes.status !== 404) {
-          const msg = adminJson || (ct.includes("application/json") ? {} : null) || ({} as any);
-          // Soft notice but proceed
+        // Only show notice if the endpoint actually responded with JSON (real API),
+        // otherwise (static export serving HTML with 200) stay silent.
+        if (ct.includes("application/json") && adminRes.status && adminRes.status !== 404) {
+          const msg = adminJson || ({} as any);
           show({ title: "Admin API unavailable", description: msg?.error || "Continuing with normal sign-in…", variant: "info" });
         }
       } catch {

@@ -42,6 +42,19 @@ export default function EditProfilePage() {
         router.replace("/sign-in/?next=/profile/edit/");
         return;
       }
+      // Determine if this is a manual (email/password) account
+      let isManual = false;
+      try {
+        const identities: any[] = Array.isArray((user as any)?.identities) ? (user as any).identities : [];
+        isManual = identities.some((i) => i?.provider === "email");
+      } catch { isManual = false; }
+      // Prefill defaults from auth metadata/email so the name shows by default
+      try {
+        const metaName = String((user.user_metadata?.full_name || user.user_metadata?.name || "") as string).trim();
+        const emailName = String(user.email || "").split("@")[0] || "";
+        const fallbackName = metaName || emailName || "";
+        setValue((prev) => ({ ...prev, name: prev.name || fallbackName }));
+      } catch {}
       // Load profile from Supabase if present
       // Try by user_id first; fallback to id for older schemas
       let { data, error } = await supabase
@@ -72,14 +85,15 @@ export default function EditProfilePage() {
         }));
         try {
           const hasDoc = Boolean((data as any).aadhaar_url || (data as any).aadhar_url || (data as any).pan_url);
-          setShowIdentityUpload(!hasDoc);
+          // Hide identity upload for manual email/password users, or when a document already exists
+          setShowIdentityUpload(isManual ? false : !hasDoc);
         } catch {
           setShowIdentityUpload(true);
         }
       }
       if (!data) {
         // No profile row yet → show identity upload by default for Google sign-ins
-        setShowIdentityUpload(true);
+        setShowIdentityUpload(isManual ? false : true);
       }
     };
     run();
@@ -161,6 +175,8 @@ export default function EditProfilePage() {
     try {
       await supabase.from("profile_photos").insert({ user_id: user.id, url });
     } catch {}
+    // Reflect the new image immediately in the form by updating local state
+    setValue((v) => ({ ...v, imageUrl: url }));
     return url;
   }
 

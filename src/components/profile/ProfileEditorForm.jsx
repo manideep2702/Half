@@ -40,13 +40,17 @@ export default function ProfileEditorForm({ initialValue, onSave, onCancel, onIm
     hydratedRef.current = true;
   }, [initialValue?.name, initialValue?.designation, initialValue?.tagline]);
 
-  // Reflect external changes for image/doc URLs but do not override text fields
+  // Reflect external changes for image URL only when the image URL itself changes
   useEffect(() => {
     setImageUrl(initialValue?.imageUrl || "");
+  }, [initialValue?.imageUrl]);
+
+  // Reflect external changes for identity doc URLs without touching the image URL
+  useEffect(() => {
     setAadhaarUrl(initialValue?.aadhaarUrl || "");
     setPanUrl(initialValue?.panUrl || "");
     setDocChoice((initialValue?.aadhaarUrl ? 'aadhaar' : (initialValue?.panUrl ? 'pan' : 'aadhaar')));
-  }, [initialValue?.imageUrl, initialValue?.aadhaarUrl, initialValue?.panUrl]);
+  }, [initialValue?.aadhaarUrl, initialValue?.panUrl]);
 
   const onFileChange = async (file) => {
     if (!file) return;
